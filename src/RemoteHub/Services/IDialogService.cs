@@ -24,4 +24,10 @@ public interface IDialogService
 
     /// <summary>Prompts for a single line of text. Returns null if cancelled.</summary>
     string? Prompt(string title, string label, string initialValue);
+
+    /// <summary>Prompts for a single master password (unlock). Returns null if cancelled.</summary>
+    string? PromptMasterPassword(string title, string message);
+
+    /// <summary>Prompts for a new master password with confirmation. Returns null if cancelled.</summary>
+    string? CreateMasterPassword(string title, string message);
 }

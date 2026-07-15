@@ -4,8 +4,10 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using RemoteHub.Core.Import;
 using RemoteHub.Core.Models;
+using RemoteHub.Core.Security;
 using RemoteHub.Core.Services;
 using RemoteHub.Services;
+using Application = System.Windows.Application;
 
 namespace RemoteHub.ViewModels;
 
@@ -19,6 +21,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IConnectionImporter _importer;
     private readonly IDialogService _dialogs;
     private readonly ISettingsService _settingsService;
+    private readonly ICredentialProtector _protector;
     private readonly SessionsViewModel _sessions;
     private readonly IServiceProvider _services;
 
@@ -30,6 +33,7 @@ public sealed partial class MainViewModel : ObservableObject
         IConnectionImporter importer,
         IDialogService dialogs,
         ISettingsService settings,
+        ICredentialProtector protector,
         SessionsViewModel sessions,
         IServiceProvider services)
     {
@@ -37,6 +41,7 @@ public sealed partial class MainViewModel : ObservableObject
         _importer = importer;
         _dialogs = dialogs;
         _settingsService = settings;
+        _protector = protector;
         _sessions = sessions;
         _services = services;
     }
@@ -61,7 +66,42 @@ public sealed partial class MainViewModel : ObservableObject
         _connectionsPath = settings.ConnectionsFilePath ?? string.Empty;
         ConnectionsFilePath = _connectionsPath;
         _document = await _store.LoadAsync(_connectionsPath);
+
+        // If the document is protected by a master password, unlock it before showing anything.
+        // Cancelling the unlock closes the app (saved passwords must not be accessed unlocked).
+        if (_document.Security is not null && !TryUnlock(_document.Security))
+        {
+            Application.Current.Shutdown();
+            return;
+        }
+
         RebuildTree();
+    }
+
+    /// <summary>Prompts for the master password until it unlocks the vault or the user cancels.</summary>
+    private bool TryUnlock(VaultHeader header)
+    {
+        if (_protector.IsUnlockedFor(header))
+        {
+            return true;
+        }
+
+        var message = "Enter your master password to unlock saved connection passwords.";
+        while (true)
+        {
+            var password = _dialogs.PromptMasterPassword("Unlock RemoteHub", message);
+            if (password is null)
+            {
+                return false; // cancelled
+            }
+
+            if (_protector.TryUnlock(header, password))
+            {
+                return true;
+            }
+
+            message = "Incorrect master password. Please try again.";
+        }
     }
 
     // --- Tree construction -------------------------------------------------
@@ -154,28 +194,22 @@ public sealed partial class MainViewModel : ObservableObject
     private Task SaveAsync() => SaveDocumentAsync();
 
     [RelayCommand]
-    private void OpenSettings()
+    private async Task OpenSettingsAsync()
     {
         var vm = _services.GetRequiredService<SettingsViewModel>();
         vm.Load();
-        if (_dialogs.ShowSettings(vm) != true)
-        {
-            return;
-        }
+        _dialogs.ShowSettings(vm);
 
-        // The path may have changed; reload the document from the new location.
-        var settings = _settingsService.Load();
-        var newPath = settings.ConnectionsFilePath ?? string.Empty;
-        if (!string.Equals(newPath, _connectionsPath, StringComparison.OrdinalIgnoreCase))
-        {
-            _connectionsPath = newPath;
-            ConnectionsFilePath = newPath;
-            _ = ReloadAsync();
-        }
+        // Master-password (re-encryption) and path changes persist immediately inside the dialog;
+        // reload so the in-memory document and tree reflect them.
+        await ReloadAsync();
     }
 
     private async Task ReloadAsync()
     {
+        var settings = _settingsService.Load();
+        _connectionsPath = settings.ConnectionsFilePath ?? string.Empty;
+        ConnectionsFilePath = _connectionsPath;
         _document = await _store.LoadAsync(_connectionsPath);
         RebuildTree();
     }

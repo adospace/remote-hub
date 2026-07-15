@@ -14,11 +14,21 @@ public partial class ConnectionEditorDialog : Window
 
     private void OnOk(object sender, RoutedEventArgs e)
     {
-        // A host is the minimum required to make a usable connection.
-        if (DataContext is ConnectionEditorViewModel vm && string.IsNullOrWhiteSpace(vm.Host))
+        if (DataContext is ConnectionEditorViewModel vm)
         {
-            MessageBox.Show(this, "Please enter a host.", "Connection", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            // A host is the minimum required to make a usable connection.
+            if (string.IsNullOrWhiteSpace(vm.Host))
+            {
+                MessageBox.Show(this, "Please enter a host.", "Connection", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // PasswordBox.Password is not bindable (by design); hand it to the VM here. A non-empty
+            // entry replaces the stored password; blank leaves the existing token untouched.
+            if (vm.CanStorePassword)
+            {
+                vm.NewPassword = PasswordInput.Password;
+            }
         }
 
         DialogResult = true;

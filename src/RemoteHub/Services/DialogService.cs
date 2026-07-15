@@ -64,6 +64,18 @@ public sealed class DialogService : IDialogService
     public bool Confirm(string title, string message) =>
         MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 
+    public string? PromptMasterPassword(string title, string message)
+    {
+        var dialog = new MasterPasswordDialog(confirmMode: false, title, message) { Owner = ActiveWindow };
+        return dialog.ShowDialog() == true ? dialog.EnteredPassword : null;
+    }
+
+    public string? CreateMasterPassword(string title, string message)
+    {
+        var dialog = new MasterPasswordDialog(confirmMode: true, title, message) { Owner = ActiveWindow };
+        return dialog.ShowDialog() == true ? dialog.EnteredPassword : null;
+    }
+
     public string? Prompt(string title, string label, string initialValue)
     {
         // A minimal, self-contained text-input dialog built in code (WPF has no InputBox).

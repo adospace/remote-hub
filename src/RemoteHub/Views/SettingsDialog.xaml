@@ -6,12 +6,15 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Settings" Height="240" Width="480"
+        Title="Settings" Height="360" Width="480"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False">
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -36,7 +39,18 @@
                     Command="{Binding BrowseCommand}" />
         </Grid>
 
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+        <TextBlock Grid.Row="4" Text="Master password" FontWeight="SemiBold" Margin="0,20,0,4" />
+        <TextBlock Grid.Row="5" Text="{Binding MasterPasswordStatus}" TextWrapping="Wrap"
+                   Foreground="Gray" FontSize="12" Margin="0,0,0,8" />
+        <StackPanel Grid.Row="6" Orientation="Horizontal">
+            <Button Content="{Binding MasterPasswordButtonText}" Padding="12,4"
+                    Command="{Binding SetOrChangeMasterPasswordCommand}" />
+            <Button Content="Remove…" Padding="12,4" Margin="8,0,0,0"
+                    Command="{Binding RemoveMasterPasswordCommand}"
+                    IsEnabled="{Binding CanRemoveMasterPassword}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
             <Button Content="Save" Width="80" Margin="0,0,8,0" IsDefault="True" Click="OnOk" />
             <Button Content="Cancel" Width="80" IsCancel="True" />
         </StackPanel>

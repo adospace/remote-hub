@@ -112,8 +112,9 @@ public class ConnectionStoreTests : IDisposable
         var loaded = await store.LoadAsync(path);
 
         Assert.NotNull(loaded);
-        Assert.Equal(1, loaded.Version);
+        Assert.Equal(2, loaded.Version);
         Assert.Empty(loaded.Roots);
+        Assert.Null(loaded.Security);
     }
 
     [Fact]

@@ -1,8 +1,9 @@
 namespace RemoteHub.Core.Models;
 
 /// <summary>
-/// A single RDP connection. Contains no password or credential material by design —
-/// the RDP control prompts for credentials (CredSSP) at connect time.
+/// A single RDP connection. Any saved password is stored only as <see cref="EncryptedPassword"/>,
+/// an opaque AES-GCM token protected by the master password — never in plaintext. When no password
+/// is stored, the RDP control prompts for credentials (CredSSP) at connect time.
 /// </summary>
 public sealed class RdpConnection : ConnectionNode
 {
@@ -15,6 +16,12 @@ public sealed class RdpConnection : ConnectionNode
     public string? Domain { get; set; }
 
     public string? Description { get; set; }
+
+    /// <summary>
+    /// The saved password encrypted under the master key (opaque base64 token), or null if no
+    /// password is stored. Never contains plaintext. Produced/read via <c>ICredentialProtector</c>.
+    /// </summary>
+    public string? EncryptedPassword { get; set; }
 
     public RdpDisplaySettings Display { get; set; } = new();
 }

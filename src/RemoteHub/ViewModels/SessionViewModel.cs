@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RemoteHub.Core.Models;
+using RemoteHub.Core.Security;
 
 namespace RemoteHub.ViewModels;
 
@@ -32,13 +33,29 @@ public sealed partial class SessionViewModel : ObservableObject
     [ObservableProperty]
     private string _title = string.Empty;
 
-    public SessionViewModel(RdpConnection connection)
+    private readonly ICredentialProtector _protector;
+
+    public SessionViewModel(RdpConnection connection, ICredentialProtector protector)
     {
         Connection = connection;
+        _protector = protector;
         Title = string.IsNullOrWhiteSpace(connection.Name) ? connection.Host : connection.Name;
     }
 
     public RdpConnection Connection { get; }
+
+    /// <summary>The protector, exposed so a pop-out window can build its own session.</summary>
+    public ICredentialProtector Protector => _protector;
+
+    /// <summary>
+    /// Decrypts the saved password for this connection, or returns null when none is stored or the
+    /// vault is locked. The plaintext is used transiently to configure the control and not retained.
+    /// </summary>
+    public string? ResolvePassword() =>
+        !string.IsNullOrEmpty(Connection.EncryptedPassword) &&
+        _protector.TryDecrypt(Connection.EncryptedPassword, out var plain)
+            ? plain
+            : null;
 
     public bool IsConnected => Status == SessionStatus.Connected;
     public bool IsConnecting => Status == SessionStatus.Connecting;

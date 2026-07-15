@@ -6,9 +6,12 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Connection" Height="600" Width="520"
+        Title="Connection" Height="640" Width="520"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="B2V" />
+    </Window.Resources>
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -36,6 +39,20 @@
                 <TextBlock Text="Description" Margin="0,0,0,4" />
                 <TextBox Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap"
                          MinHeight="48" Margin="0,0,0,16" />
+
+                <TextBlock Text="Password" Margin="0,0,0,4" />
+                <!-- Editable only when a master password is set and unlocked. -->
+                <StackPanel Visibility="{Binding CanStorePassword, Converter={StaticResource B2V}}">
+                    <PasswordBox x:Name="PasswordInput" Margin="0,0,0,4" />
+                    <TextBlock Foreground="Gray" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"
+                               Text="Encrypted with your master password. Leave blank to keep the current one." />
+                    <CheckBox Content="Clear saved password" IsChecked="{Binding ClearStoredPassword}"
+                              Margin="0,0,0,16"
+                              Visibility="{Binding HasStoredPassword, Converter={StaticResource B2V}}" />
+                </StackPanel>
+                <TextBlock Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,16"
+                           Text="Set a master password in Settings to store credentials."
+                           Visibility="{Binding CannotStorePassword, Converter={StaticResource B2V}}" />
 
                 <TextBlock Text="Display" FontWeight="SemiBold" Margin="0,0,0,8" />
 

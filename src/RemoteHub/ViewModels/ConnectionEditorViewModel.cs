@@ -1,15 +1,44 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using RemoteHub.Core.Models;
+using RemoteHub.Core.Security;
 // System.Windows.Forms (globally imported via UseWindowsForms) also defines ColorDepth; pin to the model enum.
 using ColorDepth = RemoteHub.Core.Models.ColorDepth;
 
 namespace RemoteHub.ViewModels;
 
 /// <summary>
-/// Edits an <see cref="RdpConnection"/>'s fields and display settings. No password field.
+/// Edits an <see cref="RdpConnection"/>'s fields and display settings, including an optional saved
+/// password. The password is only editable when the vault is unlocked; it is encrypted before it
+/// touches the model and is never held in plaintext beyond the edit.
 /// </summary>
 public sealed partial class ConnectionEditorViewModel : ObservableObject
 {
+    private readonly ICredentialProtector _protector;
+
+    public ConnectionEditorViewModel(ICredentialProtector protector)
+    {
+        _protector = protector;
+    }
+
+    /// <summary>True when a master password is set and unlocked, so a password can be stored.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CannotStorePassword))]
+    private bool _canStorePassword;
+
+    /// <summary>Inverse of <see cref="CanStorePassword"/>, for showing the "set a master password" hint.</summary>
+    public bool CannotStorePassword => !CanStorePassword;
+
+    /// <summary>True when the connection already has a saved password.</summary>
+    [ObservableProperty]
+    private bool _hasStoredPassword;
+
+    /// <summary>When set, replace the stored password with this plaintext (pushed by the dialog).</summary>
+    public string? NewPassword { get; set; }
+
+    /// <summary>When true, drop any stored password.</summary>
+    [ObservableProperty]
+    private bool _clearStoredPassword;
+
     [ObservableProperty]
     private string _name = string.Empty;
 
@@ -68,6 +97,11 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         Domain = connection.Domain;
         Description = connection.Description;
 
+        CanStorePassword = _protector.IsUnlocked;
+        HasStoredPassword = !string.IsNullOrEmpty(connection.EncryptedPassword);
+        NewPassword = null;
+        ClearStoredPassword = false;
+
         var display = connection.Display;
         ScreenMode = display.ScreenMode;
         DesktopWidth = display.DesktopWidth;
@@ -89,6 +123,16 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         connection.Username = string.IsNullOrWhiteSpace(Username) ? null : Username;
         connection.Domain = string.IsNullOrWhiteSpace(Domain) ? null : Domain;
         connection.Description = string.IsNullOrWhiteSpace(Description) ? null : Description;
+
+        // Password: clear, replace (encrypting first), or leave the existing token untouched.
+        if (ClearStoredPassword)
+        {
+            connection.EncryptedPassword = null;
+        }
+        else if (!string.IsNullOrEmpty(NewPassword) && _protector.IsUnlocked)
+        {
+            connection.EncryptedPassword = _protector.Encrypt(NewPassword);
+        }
 
         connection.Display.ScreenMode = ScreenMode;
         connection.Display.DesktopWidth = DesktopWidth;

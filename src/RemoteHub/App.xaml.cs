@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Application = System.Windows.Application;
 using RemoteHub.Core.Import;
+using RemoteHub.Core.Security;
 using RemoteHub.Core.Services;
 using RemoteHub.Services;
 using RemoteHub.ViewModels;
@@ -88,6 +89,7 @@ public partial class App : Application
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IConnectionStore, ConnectionStore>();
         services.AddSingleton<IConnectionImporter, RdmXmlImporter>();
+        services.AddSingleton<ICredentialProtector, MasterKeyService>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ThemeManager>();
 

@@ -1,5 +1,6 @@
 using System.Windows;
 using RemoteHub.Core.Models;
+using RemoteHub.Core.Security;
 using RemoteHub.ViewModels;
 
 namespace RemoteHub.Controls;
@@ -13,9 +14,9 @@ public partial class RdpSessionWindow : Window
 {
     private readonly SessionViewModel _session;
 
-    public RdpSessionWindow(RdpConnection connection)
+    public RdpSessionWindow(RdpConnection connection, ICredentialProtector protector)
     {
-        _session = new SessionViewModel(connection);
+        _session = new SessionViewModel(connection, protector);
         DataContext = _session;
         InitializeComponent();
 

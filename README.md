@@ -12,6 +12,9 @@ your RDP sessions.
 - **Pop-out sessions** — detach any session into its own standalone window.
 - **RDM XML import** — import connections from a Devolutions RDM XML export. Only RDP entries
   are imported, and the folder tree is rebuilt from RDM `Group` paths. **No passwords are ever read.**
+- **Master-password-protected credentials** — optionally save a password per connection, encrypted
+  with a master password (PBKDF2-SHA256 + AES-256-GCM). The app asks for the master password on
+  startup and auto-fills saved credentials at connect time.
 - **JSON storage** — connections and settings are stored as human-readable JSON, with a
   configurable connections file path.
 - **Fluent theming** — Light, Dark, or System theme via WPF's built-in Fluent theme.
@@ -61,11 +64,26 @@ please share a (sanitized) sample so the field mapping can be refined.
 
 ## Security
 
-**Passwords are never imported or stored.** The data model has no credential field, the
-importer explicitly ignores any `Password` / `SafePassword` / `Credential*` values, and nothing
-credential-related is ever written to disk. The embedded RDP control prompts for credentials at
-connect time (via CredSSP); username and domain are pre-filled from the connection only as a
-convenience.
+**Passwords are never imported from RDM.** The importer explicitly ignores any `Password` /
+`SafePassword` / `Credential*` values in the RDM export.
+
+**Saved passwords are encrypted with a master password.** Storing a connection password is
+optional. When you set a master password (in **Settings**):
+
+- A key is derived from it with **PBKDF2-SHA256** (600,000 iterations, per-vault random salt).
+- Each saved password is encrypted with **AES-256-GCM** (authenticated encryption) and stored only
+  as an opaque token in the JSON — never in plaintext.
+- The master password itself is **never stored**. A small "verifier" token lets the app check the
+  master password is correct without being able to recover it.
+- The app prompts for the master password on startup and holds the derived key in memory only while
+  running. You can **change** or **remove** the master password in Settings (changing re-encrypts
+  all saved passwords; removing deletes them).
+
+> **If you forget the master password, saved passwords cannot be recovered** — this is by design.
+> Connections themselves (host, port, username) remain readable; only the encrypted passwords are lost.
+
+When a connection has no saved password, the embedded RDP control prompts for credentials at connect
+time (via CredSSP); username and domain are pre-filled as a convenience.
 
 ## Configuration
 

@@ -38,10 +38,12 @@ public sealed class RdpClientHost : AxHost
     }
 
     /// <summary>
-    /// Applies connection + display settings from the model onto the ActiveX control. Never sets a
-    /// password: CredSSP prompts for credentials at connect time; only user/domain are pre-filled.
+    /// Applies connection + display settings from the model onto the ActiveX control. When a
+    /// <paramref name="password"/> is supplied (decrypted from the vault at connect time) it is
+    /// passed to the control for auto-logon; otherwise CredSSP prompts for credentials. The
+    /// plaintext password is only ever held transiently here and never persisted.
     /// </summary>
-    public void Setup(RdpConnection connection)
+    public void Setup(RdpConnection connection, string? password = null)
     {
         if (_ocx is null) return;
 
@@ -63,6 +65,13 @@ public sealed class RdpClientHost : AxHost
         adv.AudioRedirectionMode = (int)display.Audio;   // Local=0, Remote=1, None=2 (matches enum order)
         // FitToWindow scales the remote surface to the host size instead of showing scrollbars.
         adv.SmartSizing = display.ScreenMode == ScreenSizeMode.FitToWindow;
+
+        // Auto-logon with the saved password when available. ClearTextPassword must be set after
+        // UserName; the control keeps it in memory only for the duration of the connection.
+        if (!string.IsNullOrEmpty(password))
+        {
+            try { adv.ClearTextPassword = password; } catch { /* control may reject in rare policies */ }
+        }
     }
 
     /// <summary>Backwards-compatible primitive Setup overload (kept for the verified §7 signature).</summary>

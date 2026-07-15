@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RemoteHub.Core.Models;
+using RemoteHub.Core.Security;
 
 namespace RemoteHub.ViewModels;
 
@@ -10,15 +11,22 @@ namespace RemoteHub.ViewModels;
 /// </summary>
 public sealed partial class SessionsViewModel : ObservableObject
 {
+    private readonly ICredentialProtector _protector;
+
     [ObservableProperty]
     private SessionViewModel? _selectedSession;
+
+    public SessionsViewModel(ICredentialProtector protector)
+    {
+        _protector = protector;
+    }
 
     public ObservableCollection<SessionViewModel> Sessions { get; } = new();
 
     /// <summary>Opens a new session for the connection and selects it.</summary>
     public SessionViewModel OpenSession(RdpConnection connection)
     {
-        var session = new SessionViewModel(connection);
+        var session = new SessionViewModel(connection, _protector);
         Sessions.Add(session);
         SelectedSession = session;
         return session;

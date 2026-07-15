@@ -61,7 +61,7 @@ public partial class RdpSessionView : UserControl
         _vm.Status = SessionStatus.Connecting;
         try
         {
-            _client.Setup(_vm.Connection);
+            _client.Setup(_vm.Connection, _vm.ResolvePassword());
             _client.Connect();
         }
         catch (Exception ex)
@@ -97,7 +97,7 @@ public partial class RdpSessionView : UserControl
 
         // Live reparenting of the ActiveX is avoided for stability: open a standalone window with a
         // fresh view/session for the same connection, then drop the in-tab session.
-        var window = new RdpSessionWindow(_vm.Connection)
+        var window = new RdpSessionWindow(_vm.Connection, _vm.Protector)
         {
             Owner = Window.GetWindow(this),
         };
