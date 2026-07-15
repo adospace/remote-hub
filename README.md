@@ -7,17 +7,20 @@ your RDP sessions.
 ## Features
 
 - **Connection tree** — organize connections into nested folders with a familiar tree view.
-- **Tabbed embedded sessions** — RDP sessions run inside the app as tabs, hosting the native
-  Windows Remote Desktop ActiveX control (`mstscax.dll` / MSTSC).
+- **Tabbed embedded sessions** — open many connections at once, each as an independent live tab
+  hosting the native Windows Remote Desktop ActiveX control (`mstscax.dll` / MSTSC). Switching tabs
+  switches the active remote desktop; each session stays alive in the background.
 - **Pop-out sessions** — detach any session into its own standalone window.
-- **RDM XML import** — import connections from a Devolutions RDM XML export. Only RDP entries
-  are imported, and the folder tree is rebuilt from RDM `Group` paths. **No passwords are ever read.**
+- **RDM XML import** — import connections from a Devolutions RDM XML export (including the standard
+  `<RDMExport>` wrapper). Only RDP entries are imported, and the folder tree is rebuilt from RDM
+  `Group` paths. **No passwords are ever read.**
 - **Master-password-protected credentials** — optionally save a password per connection, encrypted
   with a master password (PBKDF2-SHA256 + AES-256-GCM). The app asks for the master password on
   startup and auto-fills saved credentials at connect time.
 - **JSON storage** — connections and settings are stored as human-readable JSON, with a
   configurable connections file path.
-- **Fluent theming** — Light, Dark, or System theme via WPF's built-in Fluent theme.
+- **Modern Fluent UI** — a Fluent command bar and connection tree, with Light, Dark, or System
+  theme via WPF's built-in Fluent theme.
 
 ## Screenshots
 
@@ -52,12 +55,18 @@ Use **Import from RDM…** and point it at an RDM XML export. A representative s
 
 The importer:
 
-- Reads only RDP entries (`ConnectionType` of `RDPConfigured` or `RDP`); other types such as
-  SSH are skipped.
+- Accepts the real RDM export shape (`<RDMExport><Connections><Connection>…`) as well as flatter
+  variants, matching element names case-insensitively.
+- Reads only RDP entries (`ConnectionType` of `RDPConfigured` or `RDP`); other types (TeamViewer,
+  SSH, …) are skipped, while explicit `Group` entries still become folders.
 - Rebuilds the folder tree from the backslash-separated RDM `Group` path
   (e.g. `Production\Web Servers`).
-- Maps host, port, username, domain, and description, tolerating format differences across RDM
-  versions.
+- Maps host (incl. inline `:port`), port, username, domain, and description — reading credentials
+  from the nested `<RDP>` element — and tolerates format differences across RDM versions.
+
+> **Heads-up:** users sometimes type passwords into a connection's *name* or *description* in RDM.
+> Those are ordinary text fields and import verbatim (visible in the tree). The importer only refuses
+> to read RDM's actual credential fields (`Password`/`SafePassword`).
 
 RDM export formats vary between versions. If import misses something from your real export,
 please share a (sanitized) sample so the field mapping can be refined.
@@ -95,6 +104,13 @@ By default, files live under `%AppData%\RemoteHub`:
 The connections file path is configurable in **Settings…** (with a Browse button), so you can
 point RemoteHub at a file in OneDrive, a shared drive, or a repo.
 
+## Troubleshooting
+
+RemoteHub writes a log to `%AppData%\RemoteHub\logs\remotehub-YYYYMMDD.log`, and an unexpected error
+shows a dialog instead of failing silently. If something goes wrong (a connection won't open, a
+crash), check that log first. Note that connecting still requires the target host to be reachable
+(VPN up, firewall open); a failed connect shows a **Disconnected** state with a reason.
+
 ## Tech stack
 
 - .NET 10, WPF (`net10.0-windows`), Windows Forms interop for the RDP host control
@@ -107,6 +123,27 @@ point RemoteHub at a file in OneDrive, a shared drive, or a repo.
 The RDP ActiveX control is hosted through a hand-written `AxHost` subclass driven by late-bound
 `dynamic` dispatch — no `COMReference` or generated interop assembly is used, so the solution
 builds cleanly with `dotnet build`.
+
+## Development
+
+See **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)** for the architecture, subsystem walkthrough,
+the non-obvious constraints around hosting the RDP ActiveX control, and how changes are verified.
+(`CLAUDE.md` at the repo root is a condensed version auto-loaded by Claude Code sessions.)
+
+```
+dotnet build RemoteHub.sln -c Debug
+dotnet test
+dotnet run --project src/RemoteHub
+```
+
+## Roadmap
+
+Some of the next things on the list (see `docs/DEVELOPMENT.md` for the full set):
+
+- Drag-and-drop reordering, connection duplication, and tree search.
+- Per-connection "always prompt for password" and idle auto-lock of the vault.
+- Display/multi-monitor options in the connection editor.
+- GitHub Actions CI and a signed, self-contained release.
 
 ## Contributing
 
