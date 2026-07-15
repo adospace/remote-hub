@@ -127,6 +127,24 @@
         <DataTemplate x:Key="SessionContentTemplate" DataType="{x:Type vm:SessionViewModel}">
             <controls:RdpSessionView />
         </DataTemplate>
+
+        <!-- TabControlEx keeps each session's view (and live RDP control) alive across tab switches. -->
+        <Style TargetType="{x:Type controls:TabControlEx}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type controls:TabControlEx}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TabPanel Grid.Row="0" IsItemsHost="True" Panel.ZIndex="1" />
+                            <Grid x:Name="PART_ItemsHolder" Grid.Row="1" Margin="0,4,0,0" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -241,7 +259,7 @@
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                 </StackPanel>
 
-                <TabControl Background="Transparent" BorderThickness="0" Margin="8"
+                <controls:TabControlEx Background="Transparent" BorderThickness="0" Margin="8"
                             Visibility="{Binding Sessions.HasSessions, Converter={StaticResource BoolToVis}}"
                             ItemsSource="{Binding Sessions.Sessions}"
                             SelectedItem="{Binding Sessions.SelectedSession}"

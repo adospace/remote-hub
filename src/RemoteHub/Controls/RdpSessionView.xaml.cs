@@ -58,6 +58,7 @@ public partial class RdpSessionView : UserControl
 
         if (_vm is not null)
         {
+            Log.Info($"Session view bound to '{_vm.Connection.Host}'.");
             _vm.ConnectRequested += OnConnectRequested;
             _vm.DisconnectRequested += OnDisconnectRequested;
             _vm.ReconnectRequested += OnReconnectRequested;
