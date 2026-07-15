@@ -11,7 +11,45 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-        <!-- One template for the whole tree; connections simply have no children (leaf). -->
+        <!-- Segoe Fluent icon glyph. -->
+        <Style x:Key="GlyphIcon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+        </Style>
+
+        <!-- Subtle, borderless command-bar button (transparent until hover). -->
+        <Style x:Key="CommandBarButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Margin" Value="1,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tree row: Fluent glyph (folder / open folder / monitor) + name. -->
         <HierarchicalDataTemplate DataType="{x:Type vm:TreeNodeViewModel}"
                                   ItemsSource="{Binding Children}">
             <StackPanel Orientation="Horizontal"
@@ -42,14 +80,26 @@
                     </ContextMenu>
                 </StackPanel.ContextMenu>
 
-                <TextBlock Margin="0,0,6,0" VerticalAlignment="Center">
+                <TextBlock Margin="0,0,10,0">
                     <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Text" Value="&#x1F5A5;" /> <!-- monitor: connection -->
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource GlyphIcon}">
+                            <!-- Connection (leaf): monitor glyph, accent colour. -->
+                            <Setter Property="Text" Value="&#xE7F4;" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                             <Style.Triggers>
+                                <!-- Folder (collapsed). -->
                                 <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                    <Setter Property="Text" Value="&#x1F4C1;" /> <!-- folder -->
+                                    <Setter Property="Text" Value="&#xE8B7;" />
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </DataTrigger>
+                                <!-- Folder (expanded) -> open-folder glyph. -->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsFolder}" Value="True" />
+                                        <Condition Binding="{Binding IsExpanded}" Value="True" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Text" Value="&#xE838;" />
+                                </MultiDataTrigger>
                             </Style.Triggers>
                         </Style>
                     </TextBlock.Style>
@@ -61,11 +111,14 @@
         <!-- Tab header: connection name + close button. -->
         <DataTemplate x:Key="SessionHeaderTemplate" DataType="{x:Type vm:SessionViewModel}">
             <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;" FontSize="14" Margin="0,0,8,0"
+                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                 <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <Button Content="&#x2715;" Padding="4,0" FontSize="10"
-                        ToolTip="Close"
+                <Button Style="{StaticResource CommandBarButton}" Padding="4" ToolTip="Close"
                         Command="{Binding DataContext.Sessions.CloseTabCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                        CommandParameter="{Binding}" />
+                        CommandParameter="{Binding}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE711;" FontSize="12" />
+                </Button>
             </StackPanel>
         </DataTemplate>
 
@@ -75,65 +128,122 @@
         </DataTemplate>
     </Window.Resources>
 
-    <DockPanel>
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
-                <MenuItem Header="_Import from RDM…" Command="{Binding ImportRdmCommand}" />
-                <Separator />
-                <MenuItem Header="New _Folder" Command="{Binding NewFolderCommand}" />
-                <MenuItem Header="New _Connection" Command="{Binding NewConnectionCommand}" />
-                <Separator />
-                <MenuItem Header="_Save" Command="{Binding SaveCommand}" />
-                <Separator />
-                <MenuItem Header="Se_ttings…" Command="{Binding OpenSettingsCommand}" />
-            </MenuItem>
-        </Menu>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <ToolBar DockPanel.Dock="Top">
-            <Button Content="Import from RDM…" Command="{Binding ImportRdmCommand}" />
-            <Separator />
-            <Button Content="New Folder" Command="{Binding NewFolderCommand}" />
-            <Button Content="New Connection" Command="{Binding NewConnectionCommand}" />
-            <Separator />
-            <Button Content="Save" Command="{Binding SaveCommand}" />
-            <Button Content="Settings…" Command="{Binding OpenSettingsCommand}" />
-        </ToolBar>
+        <!-- Command bar. -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SolidBackgroundFillColorBaseAltBrush}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="False" Margin="8,6">
+                <TextBlock DockPanel.Dock="Left" Text="RemoteHub" FontWeight="SemiBold" FontSize="14"
+                           VerticalAlignment="Center" Margin="6,0,20,0" />
 
-        <StatusBar DockPanel.Dock="Bottom">
-            <TextBlock Text="{Binding ConnectionsFilePath}" />
-        </StatusBar>
+                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
+                        Command="{Binding ImportRdmCommand}" ToolTip="Import connections from an RDM export">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE8B5;" Margin="0,0,8,0" />
+                        <TextBlock Text="Import" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
+                        Command="{Binding NewFolderCommand}" ToolTip="New folder">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE8F4;" Margin="0,0,8,0" />
+                        <TextBlock Text="New Folder" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
+                        Command="{Binding NewConnectionCommand}" ToolTip="New connection">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE710;" Margin="0,0,8,0" />
+                        <TextBlock Text="New Connection" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
+                        Command="{Binding SaveCommand}" ToolTip="Save connections">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE74E;" Margin="0,0,8,0" />
+                        <TextBlock Text="Save" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
 
-        <Grid>
+                <!-- Settings, docked to the far right with a gear glyph. -->
+                <Button DockPanel.Dock="Right" Style="{StaticResource CommandBarButton}"
+                        Command="{Binding OpenSettingsCommand}" ToolTip="Settings">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE713;" Margin="0,0,8,0" />
+                        <TextBlock Text="Settings" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </DockPanel>
+        </Border>
+
+        <!-- Body: nav pane + splitter + content. -->
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" MinWidth="180" />
+                <ColumnDefinition Width="300" MinWidth="200" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left: connection tree. -->
-            <TreeView x:Name="ConnectionsTree" Grid.Column="0"
-                      Margin="4"
-                      ItemsSource="{Binding RootNodes}"
-                      SelectedItemChanged="OnTreeSelectedItemChanged"
-                      MouseDoubleClick="OnTreeMouseDoubleClick"
-                      KeyDown="OnTreeKeyDown">
-                <TreeView.ItemContainerStyle>
-                    <Style TargetType="TreeViewItem">
-                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                    </Style>
-                </TreeView.ItemContainerStyle>
-            </TreeView>
+            <!-- Left: connection tree on its own surface. -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseAltBrush}"
+                    BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="0,0,1,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="CONNECTIONS" FontWeight="SemiBold" FontSize="11"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Margin="16,14,12,8" />
+                    <TreeView x:Name="ConnectionsTree" Grid.Row="1"
+                              Background="Transparent" BorderThickness="0" Padding="6,0,6,8"
+                              ItemsSource="{Binding RootNodes}"
+                              SelectedItemChanged="OnTreeSelectedItemChanged"
+                              MouseDoubleClick="OnTreeMouseDoubleClick"
+                              KeyDown="OnTreeKeyDown">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+                </Grid>
+            </Border>
 
-            <GridSplitter Grid.Column="1" Width="4"
+            <GridSplitter Grid.Column="1" Width="6" Background="Transparent"
                           HorizontalAlignment="Center" VerticalAlignment="Stretch" />
 
-            <!-- Right: open session tabs. -->
-            <TabControl Grid.Column="2"
-                        Margin="4"
-                        ItemsSource="{Binding Sessions.Sessions}"
-                        SelectedItem="{Binding Sessions.SelectedSession}"
-                        ItemTemplate="{StaticResource SessionHeaderTemplate}"
-                        ContentTemplate="{StaticResource SessionContentTemplate}" />
+            <!-- Right: content surface with an empty state + session tabs. -->
+            <Grid Grid.Column="2" Background="{DynamicResource LayerFillColorDefaultBrush}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="{Binding Sessions.NoSessions, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;" FontSize="48"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Text="No active sessions" FontSize="18" Margin="0,16,0,4"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="Select a connection and press Enter, or double-click it to connect."
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </StackPanel>
+
+                <TabControl Background="Transparent" BorderThickness="0" Margin="8"
+                            Visibility="{Binding Sessions.HasSessions, Converter={StaticResource BoolToVis}}"
+                            ItemsSource="{Binding Sessions.Sessions}"
+                            SelectedItem="{Binding Sessions.SelectedSession}"
+                            ItemTemplate="{StaticResource SessionHeaderTemplate}"
+                            ContentTemplate="{StaticResource SessionContentTemplate}" />
+            </Grid>
         </Grid>
-    </DockPanel>
+    </Grid>
 </Window>

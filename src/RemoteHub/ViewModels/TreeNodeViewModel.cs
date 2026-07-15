@@ -13,18 +13,14 @@ public sealed partial class TreeNodeViewModel : ObservableObject
     [ObservableProperty]
     private string _name = string.Empty;
 
+    // Folders start collapsed on every launch (the tree is expanded on demand by the user).
     [ObservableProperty]
-    private bool _isExpanded = true;
+    private bool _isExpanded;
 
     public TreeNodeViewModel(ConnectionNode node)
     {
         Node = node;
         IsFolder = node is FolderNode;
-        if (node is FolderNode folder)
-        {
-            IsExpanded = folder.IsExpanded;
-        }
-
         Name = node.Name;
     }
 

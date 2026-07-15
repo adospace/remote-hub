@@ -19,9 +19,20 @@ public sealed partial class SessionsViewModel : ObservableObject
     public SessionsViewModel(ICredentialProtector protector)
     {
         _protector = protector;
+        Sessions.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasSessions));
+            OnPropertyChanged(nameof(NoSessions));
+        };
     }
 
     public ObservableCollection<SessionViewModel> Sessions { get; } = new();
+
+    /// <summary>True when at least one session tab is open (drives the content vs. empty-state view).</summary>
+    public bool HasSessions => Sessions.Count > 0;
+
+    /// <summary>True when no session tabs are open.</summary>
+    public bool NoSessions => Sessions.Count == 0;
 
     /// <summary>Opens a new session for the connection and selects it.</summary>
     public SessionViewModel OpenSession(RdpConnection connection)
