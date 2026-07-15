@@ -35,15 +35,13 @@ public sealed class RdmXmlImporter : IConnectionImporter
         var root = xdoc.Root
             ?? throw new InvalidDataException("The RDM export has no root element.");
 
-        // Accept <Connections>, <ArrayOfConnection>, or any root that directly contains
-        // <Connection> children. Element name matching is case-insensitive throughout.
-        if (!NameIs(root, "Connections")
-            && !NameIs(root, "ArrayOfConnection")
-            && !root.Elements().Any(e => NameIs(e, "Connection")))
+        // Accept any layout that contains <Connection> entries anywhere in the tree — real RDM
+        // exports wrap them as <RDMExport><Connections><Connection>…, but flatter variants
+        // (<Connections>, <ArrayOfConnection>) are equally valid. Matching is case-insensitive.
+        if (!xdoc.Descendants().Any(e => NameIs(e, "Connection")))
         {
             throw new InvalidDataException(
-                $"Unrecognized RDM export root element '<{root.Name.LocalName}>'. " +
-                "Expected <Connections>, <ArrayOfConnection>, or a root containing <Connection> entries.");
+                $"Unrecognized RDM export (root '<{root.Name.LocalName}>'): no <Connection> entries were found.");
         }
 
         var document = new ConnectionDocument();
@@ -67,7 +65,15 @@ public sealed class RdmXmlImporter : IConnectionImporter
 
             if (connection is null)
             {
-                continue; // Not an RDP entry — skipped (may still contribute a Group path elsewhere).
+                // Not an RDP entry. If it's an explicit Group/folder, materialize the (possibly
+                // empty) folder so the tree matches RDM even when the folder has no RDP children.
+                var entryType = GetValue(element, "ConnectionType");
+                if (entryType is not null && entryType.Trim().Equals("Group", StringComparison.OrdinalIgnoreCase))
+                {
+                    ResolveFolder(document, GetValue(element, "Group"));
+                }
+
+                continue; // Other types (TeamViewer, PowerShell, …) are skipped.
             }
 
             var groupPath = GetValue(element, "Group");
@@ -113,16 +119,26 @@ public sealed class RdmXmlImporter : IConnectionImporter
             name = string.IsNullOrWhiteSpace(host) ? "(unnamed)" : host;
         }
 
+        // RDM nests credentials/settings under an <RDP> sub-element, e.g.
+        //   <Connection><RDP><UserName>…</UserName><Domain>…</Domain></RDP></Connection>
+        // so read UserName/Domain from the connection's direct children first, then from <RDP>.
+        // The password (<SafePassword>, RDM-encrypted) is deliberately never read.
+        var rdp = element.Elements().FirstOrDefault(e => NameIs(e, "RDP"));
+
         return new RdpConnection
         {
             Name = name.Trim(),
             Host = host,
             Port = port,
-            Username = NullIfEmpty(FirstValue(element, "UserName", "Username")),
-            Domain = NullIfEmpty(GetValue(element, "Domain")),
+            Username = NullIfEmpty(FromConnectionOrRdp(element, rdp, "UserName", "Username")),
+            Domain = NullIfEmpty(FromConnectionOrRdp(element, rdp, "Domain")),
             Description = NullIfEmpty(GetValue(element, "Description")),
         };
     }
+
+    /// <summary>Reads a value from the connection's direct children, falling back to the &lt;RDP&gt; child.</summary>
+    private static string? FromConnectionOrRdp(XElement element, XElement? rdp, params string[] names) =>
+        FirstValue(element, names) ?? (rdp is null ? null : FirstValue(rdp, names));
 
     /// <summary>
     /// Walks/creates the folder chain described by a backslash-separated RDM Group path and

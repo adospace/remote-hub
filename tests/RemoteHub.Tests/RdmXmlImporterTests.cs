@@ -199,4 +199,73 @@ public class RdmXmlImporterTests
     {
         Assert.Throws<InvalidDataException>(() => new RdmXmlImporter().Import("   "));
     }
+
+    // Mirrors the real Devolutions RDM export shape: an <RDMExport> wrapper, credentials nested
+    // under an <RDP> sub-element, an inline ":port" in <Url>, an explicit <Group> folder entry,
+    // and non-RDP entries (TeamViewer/PowerShell) that must be skipped without leaking secrets.
+    private const string RealShapeExport = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <RDMExport>
+          <Connections>
+            <Connection>
+              <Url>10.0.0.5:33890</Url>
+              <ConnectionType>RDPConfigured</ConnectionType>
+              <Group>Roma\SIT</Group>
+              <Name>Server SIT</Name>
+              <RDP>
+                <Domain>SIT-IE</Domain>
+                <SafePassword>lY2l2T06wsVM18XXceV84w==</SafePassword>
+                <UserName>administrator</UserName>
+              </RDP>
+            </Connection>
+            <Connection>
+              <ConnectionType>Group</ConnectionType>
+              <Group>Roma\EmptyFolder</Group>
+              <Name>EmptyFolder</Name>
+            </Connection>
+            <Connection>
+              <ConnectionType>TeamViewer</ConnectionType>
+              <Name>Casa</Name>
+              <TeamViewer />
+            </Connection>
+            <Connection>
+              <ConnectionType>PowerShell</ConnectionType>
+              <Name>PS</Name>
+            </Connection>
+          </Connections>
+        </RDMExport>
+        """;
+
+    [Fact]
+    public void ImportsRealRdmExport_Shape()
+    {
+        var doc = new RdmXmlImporter().Import(RealShapeExport);
+
+        // Root <RDMExport> wrapper is accepted; only the RDP entry becomes a connection.
+        var roma = TestData.Folder(doc.Roots, "Roma");
+        Assert.NotNull(roma);
+
+        var sit = TestData.Folder(roma!.Children, "SIT");
+        Assert.NotNull(sit);
+
+        var server = TestData.Connection(sit!.Children, "Server SIT");
+        Assert.NotNull(server);
+
+        // Credentials nested under <RDP> are read; the inline port is parsed.
+        Assert.Equal("10.0.0.5", server!.Host);
+        Assert.Equal(33890, server.Port);
+        Assert.Equal("administrator", server.Username);
+        Assert.Equal("SIT-IE", server.Domain);
+
+        // The explicit Group entry materializes even though it has no RDP children.
+        Assert.NotNull(TestData.Folder(roma.Children, "EmptyFolder"));
+
+        // TeamViewer/PowerShell are skipped; only one connection total.
+        Assert.Single(TestData.AllConnections(doc));
+
+        // The RDM-encrypted SafePassword must never appear in the imported/serialized output.
+        var json = new ConnectionSerializer().Serialize(doc);
+        Assert.DoesNotContain("SafePassword", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lY2l2T06", json, StringComparison.Ordinal);
+    }
 }
