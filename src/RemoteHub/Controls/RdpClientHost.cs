@@ -1,24 +1,37 @@
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using RemoteHub.Core.Models;
+using RemoteHub.Diagnostics;
 
 namespace RemoteHub.Controls;
 
 // Hosts the Microsoft RDP ActiveX control (mstscax.dll) without COMReference or a generated
-// interop assembly. We subclass AxHost with the control CLSID and drive it via late-bound
-// `dynamic` dispatch (the control is an IDispatch ActiveX object). VERIFIED to build under
-// net10.0-windows with UseWindowsForms=true.
+// interop assembly. We subclass AxHost with the control's CLSID and drive it via late-bound
+// `dynamic` dispatch. The exact coclass CLSID varies by Windows version, so we PROBE at runtime
+// for the newest one that actually instantiates rather than hard-coding a single GUID.
 //
-// Connection-state notifications are surfaced by polling the control's `Connected` property on a
-// WinForms timer. Subscribing to the ActiveX event sink would require IConnectionPoint plumbing
-// and a generated sink interface; polling is simpler and reliable, and the spec explicitly
-// permits it (§7).
+// IMPORTANT: this control must NOT be assigned directly as a WindowsFormsHost.Child and realized
+// during a WPF layout pass — its OLE in-place activation pumps messages and reenters the WPF
+// dispatcher ("Dispatcher processing has been suspended…"). The hosting view adds it to a WinForms
+// Panel on demand (see RdpSessionView), which keeps activation outside WPF layout.
 public sealed class RdpClientHost : AxHost
 {
-    // MsRdpClient "NotSafeForScripting" coclass CLSID (OS resolves to newest installed).
-    private const string RdpClsid = "791fa017-2de3-492e-acc5-53c67a2b94d0";
+    // NotSafeForScripting coclasses (support ClearTextPassword), newest first. AdvancedSettings9 is
+    // available on v9+, so those are preferred; older ones are fallbacks for down-level Windows.
+    private static readonly string[] CandidateClsids =
+    {
+        "A0C63C30-F08D-4AB4-907C-34905D770C7D", // MsRdpClient11
+        "8B918B82-7985-4C24-89DF-C33AD2BBFBCD", // MsRdpClient10
+        "A3BC03A0-041D-42E3-AD22-882B7865C9C5", // MsRdpClient9
+        "54D38BF7-B1EF-4479-9674-1BD6EA465258", // MsRdpClient8
+        "D2EA46A7-C2BF-426B-AF24-E19C44456399", // MsRdpClient7
+        "4EB2F086-C818-447E-B32C-C51CE2B30D31", // MsRdpClient6
+    };
+
+    private static string? _resolvedClsid;
 
     private dynamic? _ocx;
-    // Fully qualified: System.Threading.Timer is also in scope via implicit usings.
     private readonly System.Windows.Forms.Timer _stateTimer = new() { Interval = 400 };
     private bool _wasConnected;
     private bool _connectAttempted;
@@ -26,76 +39,110 @@ public sealed class RdpClientHost : AxHost
     public event EventHandler? Connected;
     public event EventHandler<string>? Disconnected;
 
-    public RdpClientHost() : base(RdpClsid)
+    public RdpClientHost() : base(ResolveClsid())
     {
         _stateTimer.Tick += OnStatePollTick;
+    }
+
+    /// <summary>Probes the candidate coclasses and caches the first that can be instantiated.</summary>
+    private static string ResolveClsid()
+    {
+        if (_resolvedClsid is not null)
+        {
+            return _resolvedClsid;
+        }
+
+        foreach (var clsid in CandidateClsids)
+        {
+            try
+            {
+                var type = Type.GetTypeFromCLSID(new Guid(clsid), throwOnError: false);
+                if (type is null)
+                {
+                    continue;
+                }
+
+                var probe = Activator.CreateInstance(type);
+                if (probe is not null)
+                {
+                    Marshal.FinalReleaseComObject(probe);
+                    _resolvedClsid = clsid;
+                    Log.Info($"RDP control resolved to CLSID {{{clsid}}}.");
+                    return clsid;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"RDP CLSID {{{clsid}}} not creatable: {ex.Message}");
+            }
+        }
+
+        _resolvedClsid = CandidateClsids[^1];
+        Log.Error($"No RDP ActiveX CLSID could be instantiated; falling back to {{{_resolvedClsid}}}.");
+        return _resolvedClsid;
     }
 
     protected override void AttachInterfaces()
     {
         base.AttachInterfaces();
         _ocx = GetOcx();
+        Log.Info("RDP OCX attached (ocx " + (_ocx is null ? "null" : "ready") + ").");
     }
 
     /// <summary>
-    /// Applies connection + display settings from the model onto the ActiveX control. When a
-    /// <paramref name="password"/> is supplied (decrypted from the vault at connect time) it is
-    /// passed to the control for auto-logon; otherwise CredSSP prompts for credentials. The
-    /// plaintext password is only ever held transiently here and never persisted.
+    /// Applies connection + display settings. When a <paramref name="password"/> is supplied it is
+    /// passed to the control for auto-logon (never persisted). Every setting is applied defensively
+    /// so a property missing on an older control version cannot break the whole configuration.
     /// </summary>
     public void Setup(RdpConnection connection, string? password = null)
     {
-        if (_ocx is null) return;
+        if (_ocx is null)
+        {
+            Log.Warn("RDP Setup called but OCX is not ready.");
+            return;
+        }
 
         var display = connection.Display;
         var (width, height) = ResolveDesktopSize(display);
 
-        _ocx.Server = connection.Host;
-        if (!string.IsNullOrEmpty(connection.Username)) _ocx.UserName = connection.Username;
-        if (!string.IsNullOrEmpty(connection.Domain)) _ocx.Domain = connection.Domain;
-        _ocx.DesktopWidth = width;
-        _ocx.DesktopHeight = height;
-        _ocx.ColorDepth = (int)display.ColorDepth;
+        TrySet(() => _ocx!.Server = connection.Host);
+        if (!string.IsNullOrEmpty(connection.Username)) TrySet(() => _ocx!.UserName = connection.Username);
+        if (!string.IsNullOrEmpty(connection.Domain)) TrySet(() => _ocx!.Domain = connection.Domain);
+        TrySet(() => _ocx!.DesktopWidth = width);
+        TrySet(() => _ocx!.DesktopHeight = height);
+        TrySet(() => _ocx!.ColorDepth = (int)display.ColorDepth);
 
-        var adv = _ocx.AdvancedSettings9;   // AdvancedSettings2..9 all valid; 9 is broadly available
-        adv.RDPPort = connection.Port <= 0 ? 3389 : connection.Port;
-        adv.RedirectClipboard = display.RedirectClipboard;
-        adv.EnableCredSspSupport = true;
-        adv.AuthenticationLevel = 2;
-        adv.AudioRedirectionMode = (int)display.Audio;   // Local=0, Remote=1, None=2 (matches enum order)
-        // FitToWindow scales the remote surface to the host size instead of showing scrollbars.
-        adv.SmartSizing = display.ScreenMode == ScreenSizeMode.FitToWindow;
-
-        // Auto-logon with the saved password when available. ClearTextPassword must be set after
-        // UserName; the control keeps it in memory only for the duration of the connection.
-        if (!string.IsNullOrEmpty(password))
+        dynamic? adv = GetBestAdvancedSettings();
+        if (adv is not null)
         {
-            try { adv.ClearTextPassword = password; } catch { /* control may reject in rare policies */ }
+            TrySet(() => adv.RDPPort = connection.Port <= 0 ? 3389 : connection.Port);
+            TrySet(() => adv.RedirectClipboard = display.RedirectClipboard);
+            TrySet(() => adv.EnableCredSspSupport = true);
+            TrySet(() => adv.AuthenticationLevel = 2);
+            TrySet(() => adv.AudioRedirectionMode = (int)display.Audio); // Local=0, Remote=1, None=2
+            TrySet(() => adv.SmartSizing = display.ScreenMode == ScreenSizeMode.FitToWindow);
+            if (!string.IsNullOrEmpty(password))
+            {
+                TrySet(() => adv.ClearTextPassword = password);
+            }
         }
-    }
-
-    /// <summary>Backwards-compatible primitive Setup overload (kept for the verified §7 signature).</summary>
-    public void Setup(string server, int port, string? userName, string? domain, int width, int height)
-    {
-        if (_ocx is null) return;
-        _ocx.Server = server;
-        if (!string.IsNullOrEmpty(userName)) _ocx.UserName = userName;
-        if (!string.IsNullOrEmpty(domain)) _ocx.Domain = domain;
-        _ocx.DesktopWidth = width;
-        _ocx.DesktopHeight = height;
-        var adv = _ocx.AdvancedSettings9;
-        adv.RDPPort = port;
-        adv.RedirectClipboard = true;
-        adv.EnableCredSspSupport = true;
-        adv.AuthenticationLevel = 2;
     }
 
     public void Connect()
     {
         if (_ocx is null) return;
-        _connectAttempted = true;
-        _ocx.Connect();
-        _stateTimer.Start();
+        try
+        {
+            _connectAttempted = true;
+            _ocx.Connect();
+            _stateTimer.Start();
+            Log.Info("RDP Connect() invoked.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("RDP Connect() failed.", ex);
+            throw;
+        }
     }
 
     public void Disconnect()
@@ -105,17 +152,50 @@ public sealed class RdpClientHost : AxHost
 
     public bool IsConnected => _ocx is not null && SafeConnectedState() == 1;
 
-    /// <summary>Toggles the control's own full-screen mode (a separate top-level RDP window).</summary>
+    /// <summary>Toggles the control's own full-screen mode.</summary>
     public void SetFullScreen(bool value)
     {
         if (_ocx is null || SafeConnectedState() != 1) return;
-        try { _ocx.FullScreen = value; } catch { /* control rejects when not connected */ }
+        try { _ocx.FullScreen = value; } catch { /* rejected when not connected */ }
+    }
+
+    /// <summary>Returns the highest available AdvancedSettingsN object, or null.</summary>
+    private object? GetBestAdvancedSettings()
+    {
+        if (_ocx is null) return null;
+        object ocx = _ocx;
+        foreach (var name in new[]
+                 {
+                     "AdvancedSettings9", "AdvancedSettings8", "AdvancedSettings7", "AdvancedSettings6",
+                     "AdvancedSettings5", "AdvancedSettings4", "AdvancedSettings3", "AdvancedSettings2",
+                 })
+        {
+            try
+            {
+                var settings = ocx.GetType().InvokeMember(name, BindingFlags.GetProperty, null, ocx, null);
+                if (settings is not null)
+                {
+                    return settings;
+                }
+            }
+            catch
+            {
+                // property not present on this control version — try the next one down
+            }
+        }
+
+        return null;
+    }
+
+    private static void TrySet(Action set)
+    {
+        try { set(); }
+        catch (Exception ex) { Log.Warn("RDP setting rejected: " + ex.Message); }
     }
 
     private void OnStatePollTick(object? sender, EventArgs e)
     {
-        // 0 = disconnected, 1 = connected, 2 = connecting.
-        var state = SafeConnectedState();
+        var state = SafeConnectedState(); // 0 disconnected, 1 connected, 2 connecting
 
         if (state == 1 && !_wasConnected)
         {
@@ -126,8 +206,6 @@ public sealed class RdpClientHost : AxHost
 
         if (state == 0 && _connectAttempted)
         {
-            // Fires for both a dropped live session (1 -> 0) and a failed connect (2 -> 0),
-            // so the UI never gets stuck in the "Connecting" state.
             _connectAttempted = false;
             _wasConnected = false;
             _stateTimer.Stop();
@@ -135,8 +213,6 @@ public sealed class RdpClientHost : AxHost
         }
     }
 
-    // Connected returns 0 (disconnected), 1 (connected) or 2 (connecting). Guard against the
-    // control not yet being realized or throwing mid-teardown.
     private int SafeConnectedState()
     {
         try { return _ocx is null ? 0 : (int)_ocx.Connected; }
@@ -172,6 +248,7 @@ public sealed class RdpClientHost : AxHost
             _stateTimer.Dispose();
             Disconnect();
         }
+
         base.Dispose(disposing);
     }
 }

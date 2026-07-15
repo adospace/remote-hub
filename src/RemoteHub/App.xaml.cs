@@ -1,9 +1,12 @@
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Application = System.Windows.Application;
+using MessageBox = System.Windows.MessageBox;
 using RemoteHub.Core.Import;
 using RemoteHub.Core.Security;
 using RemoteHub.Core.Services;
+using RemoteHub.Diagnostics;
 using RemoteHub.Services;
 using RemoteHub.ViewModels;
 using RemoteHub.Views;
@@ -25,6 +28,12 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Global crash logging so failures are never silent.
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        Log.Info($"RemoteHub starting (logs at {Log.Directory}).");
 
         _services = ConfigureServices();
 
@@ -79,6 +88,27 @@ public partial class App : Application
 
         _services?.Dispose();
         base.OnExit(e);
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        Log.Error("Unhandled UI exception.", e.Exception);
+        // Keep the app alive and tell the user, rather than crashing silently.
+        MessageBox.Show(
+            $"An unexpected error occurred:\n\n{e.Exception.Message}\n\nDetails were written to:\n{Log.Directory}",
+            "RemoteHub", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.Handled = true;
+    }
+
+    private static void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        Log.Error("Fatal unhandled exception (terminating=" + e.IsTerminating + ").", e.ExceptionObject as Exception);
+    }
+
+    private static void OnUnobservedTaskException(object? sender, System.Threading.Tasks.UnobservedTaskExceptionEventArgs e)
+    {
+        Log.Error("Unobserved task exception.", e.Exception);
+        e.SetObserved();
     }
 
     private static ServiceProvider ConfigureServices()

@@ -1,35 +1,47 @@
 using System.Windows;
+using RemoteHub.Diagnostics;
 using RemoteHub.ViewModels;
+using WinForms = System.Windows.Forms;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace RemoteHub.Controls;
 
 /// <summary>
-/// Hosts a single RDP session: a <c>WindowsFormsHost</c> wrapping an <see cref="RdpClientHost"/>
-/// plus a session toolbar. The bound <see cref="SessionViewModel"/> raises intent events
-/// (connect/disconnect/reconnect/pop-out/full-screen) that this view translates into control
-/// operations, and the view pushes connection state back onto the ViewModel's Status.
+/// Hosts a single RDP session. A <c>WindowsFormsHost</c> wraps a WinForms <see cref="WinForms.Panel"/>;
+/// the <see cref="RdpClientHost"/> ActiveX control is created lazily and added to that panel only on
+/// connect (a user action) — never while the WPF window is laying out, which would reenter the
+/// dispatcher and crash. The bound <see cref="SessionViewModel"/> raises intent events that this
+/// view turns into control operations; the view pushes connection state back onto the ViewModel.
 /// </summary>
 public partial class RdpSessionView : UserControl
 {
-    private readonly RdpClientHost _client = new();
+    private readonly WinForms.Panel _panel = new() { BackColor = System.Drawing.Color.Black };
+    private RdpClientHost? _client;
     private SessionViewModel? _vm;
     private bool _reconnectPending;
 
     public RdpSessionView()
     {
         InitializeComponent();
-        RdpHostContainer.Child = _client;
-
-        _client.Connected += OnClientConnected;
-        _client.Disconnected += OnClientDisconnected;
+        RdpHostContainer.Child = _panel;
 
         DataContextChanged += OnDataContextChanged;
         Unloaded += OnUnloaded;
     }
 
-    /// <summary>The hosted RDP ActiveX wrapper.</summary>
-    public RdpClientHost Client => _client;
+    /// <summary>Creates the ActiveX host on first use and adds it to the WinForms panel.</summary>
+    private RdpClientHost EnsureClient()
+    {
+        if (_client is null)
+        {
+            _client = new RdpClientHost { Dock = WinForms.DockStyle.Fill };
+            _client.Connected += OnClientConnected;
+            _client.Disconnected += OnClientDisconnected;
+            _panel.Controls.Add(_client); // realizes + activates the ActiveX here (outside WPF layout)
+        }
+
+        return _client;
+    }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
@@ -56,30 +68,46 @@ public partial class RdpSessionView : UserControl
 
     private void OnConnectRequested(object? sender, EventArgs e)
     {
-        if (_vm is null || _client.IsConnected) return;
+        if (_vm is null) return;
+
+        RdpClientHost client;
+        try
+        {
+            client = EnsureClient();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Failed to create the RDP control.", ex);
+            _vm.Status = SessionStatus.Disconnected;
+            _vm.StatusDetail = "Could not initialize the remote desktop control: " + ex.Message;
+            return;
+        }
+
+        if (client.IsConnected) return;
+
         _vm.StatusDetail = null;
         _vm.Status = SessionStatus.Connecting;
         try
         {
-            _client.Setup(_vm.Connection, _vm.ResolvePassword());
-            _client.Connect();
+            client.Setup(_vm.Connection, _vm.ResolvePassword());
+            client.Connect();
         }
         catch (Exception ex)
         {
+            Log.Error("Failed to start the RDP connection.", ex);
             _vm.Status = SessionStatus.Disconnected;
             _vm.StatusDetail = ex.Message;
         }
     }
 
-    private void OnDisconnectRequested(object? sender, EventArgs e) => _client.Disconnect();
+    private void OnDisconnectRequested(object? sender, EventArgs e) => _client?.Disconnect();
 
     private void OnReconnectRequested(object? sender, EventArgs e)
     {
         if (_vm is null) return;
-        if (_client.IsConnected)
+        if (_client is { IsConnected: true })
         {
-            // Defer the connect until the control reports it has fully torn down
-            // (handled in OnClientDisconnected) to avoid connecting a half-disposed session.
+            // Defer the connect until the control reports it has fully torn down.
             _reconnectPending = true;
             _client.Disconnect();
         }
@@ -89,19 +117,19 @@ public partial class RdpSessionView : UserControl
         }
     }
 
-    private void OnFullScreenRequested(object? sender, EventArgs e) => _client.SetFullScreen(true);
+    private void OnFullScreenRequested(object? sender, EventArgs e) => _client?.SetFullScreen(true);
 
     private void OnPopOutRequested(object? sender, EventArgs e)
     {
         if (_vm is null) return;
 
-        // Live reparenting of the ActiveX is avoided for stability: open a standalone window with a
-        // fresh view/session for the same connection, then drop the in-tab session.
+        // A pop-out gets a fresh window/session for the same connection (live ActiveX reparenting is
+        // avoided for stability), then the in-tab session is dropped.
         var window = new RdpSessionWindow(_vm.Connection, _vm.Protector)
         {
             Owner = Window.GetWindow(this),
         };
-        _client.Disconnect();
+        _client?.Disconnect();
         _vm.Status = SessionStatus.Disconnected;
         window.Show();
     }
@@ -128,9 +156,7 @@ public partial class RdpSessionView : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        // Only tear down when the control is truly leaving the tree (not on tab switches, which do
-        // not unload WindowsFormsHost children). Guard against double-dispose.
-        if (!_client.IsDisposed)
+        if (_client is { IsDisposed: false })
         {
             _client.Disconnect();
         }
