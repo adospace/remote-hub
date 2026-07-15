@@ -18,8 +18,11 @@ your RDP sessions.
 
 ## Screenshots
 
-<!-- Screenshots go here. -->
-_Coming soon._
+| Light | Dark |
+| --- | --- |
+| ![RemoteHub — light theme](docs/images/screenshot-light.png) | ![RemoteHub — dark theme](docs/images/screenshot-dark.png) |
+
+The connection tree above was produced by importing [`docs/sample-rdm-export.xml`](docs/sample-rdm-export.xml).
 
 ## Requirements
 
