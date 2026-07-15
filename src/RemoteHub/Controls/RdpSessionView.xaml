@@ -1,0 +1,16 @@
+<UserControl x:Class="RemoteHub.Controls.RdpSessionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wf="clr-namespace:System.Windows.Forms.Integration;assembly=WindowsFormsIntegration">
+    <DockPanel>
+        <ToolBar DockPanel.Dock="Top">
+            <Button Content="Connect" Command="{Binding ConnectCommand}" />
+            <Button Content="Disconnect" Command="{Binding DisconnectCommand}" />
+            <Separator />
+            <Button Content="Pop-out" Command="{Binding PopOutCommand}" />
+        </ToolBar>
+
+        <!-- Hosts the RDP ActiveX control via WindowsFormsHost. Child is wired in code-behind. -->
+        <wf:WindowsFormsHost x:Name="RdpHostContainer" />
+    </DockPanel>
+</UserControl>
