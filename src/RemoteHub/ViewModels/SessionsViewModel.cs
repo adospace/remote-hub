@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using RemoteHub.Core.Models;
 
 namespace RemoteHub.ViewModels;
@@ -30,6 +31,16 @@ public sealed partial class SessionsViewModel : ObservableObject
         if (ReferenceEquals(SelectedSession, session))
         {
             SelectedSession = Sessions.Count > 0 ? Sessions[^1] : null;
+        }
+    }
+
+    /// <summary>Command hook for the tab-header close button.</summary>
+    [RelayCommand]
+    private void CloseTab(SessionViewModel? session)
+    {
+        if (session is not null)
+        {
+            CloseSession(session);
         }
     }
 }

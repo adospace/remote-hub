@@ -6,6 +6,7 @@ namespace RemoteHub.ViewModels;
 
 /// <summary>
 /// Wraps a <see cref="ConnectionNode"/> (folder or connection) for display in the tree.
+/// Keeps the underlying model in sync when the name or expansion state changes.
 /// </summary>
 public sealed partial class TreeNodeViewModel : ObservableObject
 {
@@ -18,12 +19,13 @@ public sealed partial class TreeNodeViewModel : ObservableObject
     public TreeNodeViewModel(ConnectionNode node)
     {
         Node = node;
-        Name = node.Name;
         IsFolder = node is FolderNode;
         if (node is FolderNode folder)
         {
             IsExpanded = folder.IsExpanded;
         }
+
+        Name = node.Name;
     }
 
     /// <summary>The underlying model node.</summary>
@@ -31,5 +33,18 @@ public sealed partial class TreeNodeViewModel : ObservableObject
 
     public bool IsFolder { get; }
 
+    /// <summary>True for leaf connection nodes (used to gate the Connect action).</summary>
+    public bool IsConnection => !IsFolder;
+
     public ObservableCollection<TreeNodeViewModel> Children { get; } = new();
+
+    partial void OnNameChanged(string value) => Node.Name = value;
+
+    partial void OnIsExpandedChanged(bool value)
+    {
+        if (Node is FolderNode folder)
+        {
+            folder.IsExpanded = value;
+        }
+    }
 }

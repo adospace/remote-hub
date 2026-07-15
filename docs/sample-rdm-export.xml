@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Representative Devolutions Remote Desktop Manager (RDM) XML export used to exercise
+  RemoteHub's RdmXmlImporter. It intentionally mixes:
+    * nested Group paths (folder tree is derived from backslash-separated Group values)
+    * several RDPConfigured entries (imported)
+    * a bare "RDP" ConnectionType (also imported)
+    * a host that carries an inline ":port"
+    * an explicit RDPPort that must win over the default
+    * a root-level RDP connection with no Group
+    * a non-RDP SSH entry (skipped)
+    * a Group-only entry (skipped)
+    * bogus Password / SafePassword / Credential fields that MUST never be imported
+-->
+<Connections>
+
+  <Connection>
+    <ID>11111111-1111-1111-1111-111111111111</ID>
+    <Name>Web01</Name>
+    <ConnectionType>RDPConfigured</ConnectionType>
+    <Group>Production\Web Servers</Group>
+    <Url>web01.contoso.com</Url>
+    <UserName>svc_web</UserName>
+    <Domain>CONTOSO</Domain>
+    <Description>Primary web front-end</Description>
+    <Password>THIS-MUST-BE-IGNORED</Password>
+    <SafePassword>ALSO-IGNORED</SafePassword>
+  </Connection>
+
+  <Connection>
+    <ID>22222222-2222-2222-2222-222222222222</ID>
+    <Name>Web02</Name>
+    <ConnectionType>RDPConfigured</ConnectionType>
+    <Group>Production\Web Servers</Group>
+    <HostName>web02.contoso.com:3390</HostName>
+    <UserName>svc_web</UserName>
+    <Domain>CONTOSO</Domain>
+    <CredentialPassword>SECRET-IGNORE-ME</CredentialPassword>
+  </Connection>
+
+  <Connection>
+    <ID>33333333-3333-3333-3333-333333333333</ID>
+    <Name>DB01</Name>
+    <ConnectionType>RDPConfigured</ConnectionType>
+    <Group>Production\Databases</Group>
+    <Host>db01.contoso.com</Host>
+    <RDPPort>3391</RDPPort>
+    <UserName>dba</UserName>
+    <Domain>CONTOSO</Domain>
+    <Description>SQL primary</Description>
+  </Connection>
+
+  <Connection>
+    <ID>44444444-4444-4444-4444-444444444444</ID>
+    <Name>Lab-DC</Name>
+    <ConnectionType>RDP</ConnectionType>
+    <Group>Lab</Group>
+    <Url>10.0.0.10</Url>
+    <UserName>administrator</UserName>
+  </Connection>
+
+  <Connection>
+    <ID>55555555-5555-5555-5555-555555555555</ID>
+    <Name>Jump Box</Name>
+    <ConnectionType>RDPConfigured</ConnectionType>
+    <Url>jump.contoso.com</Url>
+    <Description>Root-level bastion (no group)</Description>
+  </Connection>
+
+  <Connection>
+    <ID>66666666-6666-6666-6666-666666666666</ID>
+    <Name>edge-router</Name>
+    <ConnectionType>SSHShell</ConnectionType>
+    <Group>Network</Group>
+    <Host>edge.contoso.com</Host>
+    <UserName>netadmin</UserName>
+    <Password>SSH-SECRET-IGNORE</Password>
+  </Connection>
+
+  <Connection>
+    <ID>77777777-7777-7777-7777-777777777777</ID>
+    <Name>Production</Name>
+    <ConnectionType>Group</ConnectionType>
+    <Group>Production</Group>
+  </Connection>
+
+</Connections>

@@ -13,7 +13,11 @@ public partial class SettingsDialog : Window
 
     private void OnOk(object sender, RoutedEventArgs e)
     {
-        // TODO(Implement): validate + persist via the view-model before closing.
+        if (DataContext is SettingsViewModel vm)
+        {
+            vm.Save();
+        }
+
         DialogResult = true;
     }
 }

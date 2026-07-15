@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using RemoteHub.Core.Services;
 using RemoteHub.Services;
 
@@ -11,6 +12,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
     private readonly ThemeManager _themeManager;
+    private readonly IDialogService _dialogs;
 
     [ObservableProperty]
     private ThemePreference _theme = ThemePreference.System;
@@ -18,23 +20,49 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string? _connectionsFilePath;
 
-    public SettingsViewModel(ISettingsService settingsService, ThemeManager themeManager)
+    public SettingsViewModel(
+        ISettingsService settingsService,
+        ThemeManager themeManager,
+        IDialogService dialogs)
     {
         _settingsService = settingsService;
         _themeManager = themeManager;
+        _dialogs = dialogs;
     }
+
+    /// <summary>Available theme choices for the selector.</summary>
+    public IReadOnlyList<ThemePreference> Themes { get; } = Enum.GetValues<ThemePreference>();
 
     /// <summary>Loads current settings into the editable properties.</summary>
     public void Load()
     {
-        // TODO(Implement): read AppSettings and populate properties.
-        throw new NotImplementedException();
+        var settings = _settingsService.Load();
+        Theme = settings.Theme;
+        ConnectionsFilePath = settings.ConnectionsFilePath;
     }
 
     /// <summary>Persists edited settings and applies the theme live.</summary>
     public void Save()
     {
-        // TODO(Implement): persist via ISettingsService and apply theme via ThemeManager.
-        throw new NotImplementedException();
+        var settings = _settingsService.Load();
+        settings.Theme = Theme;
+        if (!string.IsNullOrWhiteSpace(ConnectionsFilePath))
+        {
+            settings.ConnectionsFilePath = ConnectionsFilePath;
+        }
+
+        _settingsService.Save(settings);
+        _themeManager.Apply(Theme);
+    }
+
+    /// <summary>Prompts for a connections file path via the dialog service.</summary>
+    [RelayCommand]
+    private void Browse()
+    {
+        var path = _dialogs.PickConnectionsFile(save: true);
+        if (path is not null)
+        {
+            ConnectionsFilePath = path;
+        }
     }
 }

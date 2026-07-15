@@ -1,0 +1,9 @@
+<Window x:Class="RemoteHub.Controls.RdpSessionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:RemoteHub.Controls"
+        Title="{Binding Title}"
+        Width="1280" Height="800"
+        WindowStartupLocation="CenterScreen">
+    <controls:RdpSessionView DataContext="{Binding}" />
+</Window>

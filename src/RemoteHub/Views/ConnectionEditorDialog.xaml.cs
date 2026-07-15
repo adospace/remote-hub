@@ -1,5 +1,6 @@
 using System.Windows;
 using RemoteHub.ViewModels;
+using MessageBox = System.Windows.MessageBox;
 
 namespace RemoteHub.Views;
 
@@ -13,7 +14,13 @@ public partial class ConnectionEditorDialog : Window
 
     private void OnOk(object sender, RoutedEventArgs e)
     {
-        // TODO(Implement): validate before closing.
+        // A host is the minimum required to make a usable connection.
+        if (DataContext is ConnectionEditorViewModel vm && string.IsNullOrWhiteSpace(vm.Host))
+        {
+            MessageBox.Show(this, "Please enter a host.", "Connection", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         DialogResult = true;
     }
 }

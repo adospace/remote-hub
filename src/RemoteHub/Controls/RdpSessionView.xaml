@@ -1,16 +1,52 @@
 <UserControl x:Class="RemoteHub.Controls.RdpSessionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:wf="clr-namespace:System.Windows.Forms.Integration;assembly=WindowsFormsIntegration">
+             xmlns:wf="clr-namespace:System.Windows.Forms.Integration;assembly=WindowsFormsIntegration"
+             xmlns:vm="clr-namespace:RemoteHub.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:SessionViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
     <DockPanel>
         <ToolBar DockPanel.Dock="Top">
-            <Button Content="Connect" Command="{Binding ConnectCommand}" />
-            <Button Content="Disconnect" Command="{Binding DisconnectCommand}" />
+            <Button Content="Connect" Command="{Binding ConnectCommand}" ToolTip="Connect this session" />
+            <Button Content="Disconnect" Command="{Binding DisconnectCommand}" ToolTip="Disconnect" />
+            <Button Content="Reconnect" Command="{Binding ReconnectCommand}" ToolTip="Disconnect and connect again" />
             <Separator />
-            <Button Content="Pop-out" Command="{Binding PopOutCommand}" />
+            <Button Content="Full Screen" Command="{Binding FullScreenCommand}" ToolTip="Enter the RDP full-screen mode" />
+            <Button Content="Pop-out" Command="{Binding PopOutCommand}" ToolTip="Open this session in a separate window" />
+            <Separator />
+            <TextBlock VerticalAlignment="Center" Margin="6,0" Text="{Binding StatusText}" />
         </ToolBar>
 
-        <!-- Hosts the RDP ActiveX control via WindowsFormsHost. Child is wired in code-behind. -->
-        <wf:WindowsFormsHost x:Name="RdpHostContainer" />
+        <!-- Host and overlay never render at the same time: a WindowsFormsHost always paints above
+             WPF content (airspace), so we collapse the host while disconnected and show the WPF
+             overlay in its place. -->
+        <Grid>
+            <wf:WindowsFormsHost x:Name="RdpHostContainer"
+                                 Visibility="{Binding IsSessionActive, Converter={StaticResource BoolToVis}}" />
+
+            <Border Background="#1E1E1E"
+                    Visibility="{Binding IsDisconnected, Converter={StaticResource BoolToVis}}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Disconnected"
+                               Foreground="#EEEEEE" FontSize="20" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding Connection.Host}"
+                               Foreground="#AAAAAA" FontSize="13" Margin="0,4,0,0"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding StatusDetail}"
+                               Foreground="#C08080" FontSize="12" Margin="0,4,0,0"
+                               TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center"
+                               HorizontalAlignment="Center" />
+                    <Button Content="Reconnect" Command="{Binding ConnectCommand}"
+                            Margin="0,16,0,0" Padding="20,6" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </DockPanel>
 </UserControl>

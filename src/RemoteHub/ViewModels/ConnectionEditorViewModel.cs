@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using RemoteHub.Core.Models;
+// System.Windows.Forms (globally imported via UseWindowsForms) also defines ColorDepth; pin to the model enum.
+using ColorDepth = RemoteHub.Core.Models.ColorDepth;
 
 namespace RemoteHub.ViewModels;
 
@@ -26,13 +28,54 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     [ObservableProperty]
     private string? _description;
 
+    [ObservableProperty]
+    private ScreenSizeMode _screenMode = ScreenSizeMode.FitToWindow;
+
+    [ObservableProperty]
+    private int _desktopWidth = 1920;
+
+    [ObservableProperty]
+    private int _desktopHeight = 1080;
+
+    [ObservableProperty]
+    private ColorDepth _colorDepth = ColorDepth.Bpp32;
+
+    [ObservableProperty]
+    private bool _fullScreen;
+
+    [ObservableProperty]
+    private bool _redirectClipboard = true;
+
+    [ObservableProperty]
+    private AudioRedirectionMode _audio = AudioRedirectionMode.Local;
+
+    /// <summary>Enum choices for the display-settings selectors.</summary>
+    public IReadOnlyList<ScreenSizeMode> ScreenModes { get; } = Enum.GetValues<ScreenSizeMode>();
+
+    public IReadOnlyList<ColorDepth> ColorDepths { get; } = Enum.GetValues<ColorDepth>();
+
+    public IReadOnlyList<AudioRedirectionMode> AudioModes { get; } = Enum.GetValues<AudioRedirectionMode>();
+
     /// <summary>
     /// Loads the editor from an existing connection. Called before showing the dialog.
     /// </summary>
     public void Load(RdpConnection connection)
     {
-        // TODO(Implement): copy all fields + display settings into editable properties.
-        throw new NotImplementedException();
+        Name = connection.Name;
+        Host = connection.Host;
+        Port = connection.Port;
+        Username = connection.Username;
+        Domain = connection.Domain;
+        Description = connection.Description;
+
+        var display = connection.Display;
+        ScreenMode = display.ScreenMode;
+        DesktopWidth = display.DesktopWidth;
+        DesktopHeight = display.DesktopHeight;
+        ColorDepth = display.ColorDepth;
+        FullScreen = display.FullScreen;
+        RedirectClipboard = display.RedirectClipboard;
+        Audio = display.Audio;
     }
 
     /// <summary>
@@ -40,7 +83,19 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     /// </summary>
     public void ApplyTo(RdpConnection connection)
     {
-        // TODO(Implement): copy editable properties back into the model.
-        throw new NotImplementedException();
+        connection.Name = string.IsNullOrWhiteSpace(Name) ? Host : Name;
+        connection.Host = Host;
+        connection.Port = Port;
+        connection.Username = string.IsNullOrWhiteSpace(Username) ? null : Username;
+        connection.Domain = string.IsNullOrWhiteSpace(Domain) ? null : Domain;
+        connection.Description = string.IsNullOrWhiteSpace(Description) ? null : Description;
+
+        connection.Display.ScreenMode = ScreenMode;
+        connection.Display.DesktopWidth = DesktopWidth;
+        connection.Display.DesktopHeight = DesktopHeight;
+        connection.Display.ColorDepth = ColorDepth;
+        connection.Display.FullScreen = FullScreen;
+        connection.Display.RedirectClipboard = RedirectClipboard;
+        connection.Display.Audio = Audio;
     }
 }
