@@ -10,7 +10,14 @@
     <RootNamespace>RemoteHub</RootNamespace>
     <AssemblyName>RemoteHub</AssemblyName>
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- App icon assets embedded for the window/taskbar and the command-bar logo. -->
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\app-icon.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RemoteHub.Core\RemoteHub.Core.csproj" />

@@ -4,6 +4,7 @@
         xmlns:vm="clr-namespace:RemoteHub.ViewModels"
         xmlns:controls="clr-namespace:RemoteHub.Controls"
         Title="RemoteHub" Height="800" Width="1200"
+        Icon="pack://application:,,,/Assets/app.ico"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -140,8 +141,11 @@
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="False" Margin="8,6">
+                <Image DockPanel.Dock="Left" Width="22" Height="22" VerticalAlignment="Center"
+                       Margin="6,0,10,0" Source="pack://application:,,,/Assets/app-icon.png"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
                 <TextBlock DockPanel.Dock="Left" Text="RemoteHub" FontWeight="SemiBold" FontSize="14"
-                           VerticalAlignment="Center" Margin="6,0,20,0" />
+                           VerticalAlignment="Center" Margin="0,0,20,0" />
 
                 <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
                         Command="{Binding ImportRdmCommand}" ToolTip="Import connections from an RDM export">
