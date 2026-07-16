@@ -1,9 +1,13 @@
 # Deployment & Auto-Update
 
-**Status: implemented.** Velopack packaging, the tag-triggered GitHub Actions workflow, and the
-in-app update banner are all in the tree and build clean. **The pipeline has not yet been exercised
-against a real tag** — no `v*` tag has ever been pushed, so the first release (`v0.1.0`) is also the
-first live test of `release.yml`. Expect to iterate on the workflow when that happens.
+**Status: implemented and shipping.** Velopack packaging, the tag-triggered GitHub Actions workflow,
+and the in-app update banner are all in the tree. `v0.1.0` was published from a real tag push and
+`release.yml` passed on its first run, producing `*-Setup.exe`, `*-full.nupkg` and `releases.win.json`
+on the Releases page — the assets `GithubSource` needs to serve updates.
+
+Known-good as of `v0.1.0`: build → pack → publish. `v0.1.0` had no predecessor, so it generated no
+delta packages and could not exercise the in-app banner (nothing to update *from*) — the first
+release after it is what proves the update path end-to-end.
 
 ## What ships
 

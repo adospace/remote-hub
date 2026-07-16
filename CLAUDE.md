@@ -31,8 +31,9 @@ installer to the **Releases** page), plus an in-app **update banner** (bottom ro
 `GithubSource`; **unsigned** (SmartScreen "Unknown publisher" on first run is expected).
 Pieces: `Program.cs`, `Services/IUpdateService.cs` + `WindowsUpdateService.cs`,
 `ViewModels/UpdateViewModel.cs`, `Controls/UpdateBar.xaml`. Updates no-op in DEBUG (empty `RepoUrl`)
-and in non-installed builds (`UpdateManager.IsInstalled`). Cut a release: `git tag v0.1.0 && git push origin v0.1.0`.
-**Not yet run against a real tag** — the first push is also the workflow's first live test.
+and in non-installed builds (`UpdateManager.IsInstalled`). Cut a release: `git tag vX.Y.Z && git push origin vX.Y.Z`
+(tag `main`, not a branch — the tag must live in `main`'s history).
+`v0.1.0` shipped from a real tag and the workflow passed first run.
 Detail + rationale: **`docs/DEPLOYMENT.md`**.
 
 ## Hard constraints — do NOT violate (each caused a real bug)
