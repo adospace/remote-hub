@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RemoteHub.Core.Models;
 using RemoteHub.Core.Security;
 using RemoteHub.Core.Services;
+using RemoteHub.Diagnostics;
 using RemoteHub.Services;
 using Application = System.Windows.Application;
 
@@ -44,6 +45,7 @@ public sealed partial class MainViewModel : ObservableObject
         _sessions = sessions;
         _update = update;
         _services = services;
+        _sessions.EditSessionRequested += OnEditSessionRequested;
     }
 
     /// <summary>Open RDP session tabs, surfaced for the main window's TabControl.</summary>
@@ -312,18 +314,50 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (target.Node is RdpConnection connection)
         {
-            var editor = _services.GetRequiredService<ConnectionEditorViewModel>();
-            editor.Load(connection);
-            if (_dialogs.EditConnection(editor) == true)
-            {
-                editor.ApplyTo(connection);
-                RebuildTree();   // name may have changed -> re-sort
-                await SaveDocumentAsync();
-            }
+            await EditConnectionAsync(connection);
         }
         else
         {
             await RenameNodeAsync(target);
+        }
+    }
+
+    /// <summary>
+    /// Opens the connection editor and persists the result. Shared by the tree's edit command and
+    /// the session toolbar's edit button, which reach the same connection from different places.
+    /// </summary>
+    private async Task EditConnectionAsync(RdpConnection connection)
+    {
+        var editor = _services.GetRequiredService<ConnectionEditorViewModel>();
+        editor.Load(connection);
+        if (_dialogs.EditConnection(editor) != true)
+        {
+            return;
+        }
+
+        editor.ApplyTo(connection);
+
+        // Tabs cache the title at construction, so a rename would otherwise leave them stale.
+        foreach (var session in _sessions.Sessions.Where(s => ReferenceEquals(s.Connection, connection)))
+        {
+            session.RefreshTitle();
+        }
+
+        RebuildTree();   // name may have changed -> re-sort
+        await SaveDocumentAsync();
+    }
+
+    // Fired by the session toolbar's edit button. async void because it is an event handler; it must
+    // not throw, so failures are logged rather than surfaced through the global crash handler.
+    private async void OnEditSessionRequested(object? sender, SessionViewModel session)
+    {
+        try
+        {
+            await EditConnectionAsync(session.Connection);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Editing a connection from the session toolbar failed.", ex);
         }
     }
 

@@ -45,6 +45,11 @@
                         Command="{Binding PopOutCommand}">
                     <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE8A7;" FontSize="13" />
                 </Button>
+                <Border Width="1" Margin="5,4" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                <Button Style="{StaticResource TabActionButton}" ToolTip="Edit connection"
+                        Command="{Binding EditCommand}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE70F;" FontSize="13" />
+                </Button>
             </StackPanel>
         </Border>
 

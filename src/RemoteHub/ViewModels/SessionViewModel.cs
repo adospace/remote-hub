@@ -84,6 +84,13 @@ public sealed partial class SessionViewModel : ObservableObject
     public event EventHandler? PopOutRequested;
     public event EventHandler? CloseRequested;
 
+    /// <summary>
+    /// Raised when the user asks to edit this session's connection. Unlike the other intents this
+    /// one is app-level, not control-level: SessionsViewModel forwards it to MainViewModel, which
+    /// owns the editor dialog and persistence.
+    /// </summary>
+    public event EventHandler? EditRequested;
+
     [RelayCommand]
     private void Connect() => ConnectRequested?.Invoke(this, EventArgs.Empty);
 
@@ -98,6 +105,16 @@ public sealed partial class SessionViewModel : ObservableObject
 
     [RelayCommand]
     private void PopOut() => PopOutRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void Edit() => EditRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Re-reads the title from the connection. Called after an edit, since renaming the connection
+    /// would otherwise leave a stale tab header.
+    /// </summary>
+    public void RefreshTitle() =>
+        Title = string.IsNullOrWhiteSpace(Connection.Name) ? Connection.Host : Connection.Name;
 
     [RelayCommand]
     private void Close()

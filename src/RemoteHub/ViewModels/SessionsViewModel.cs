@@ -28,6 +28,12 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     public ObservableCollection<SessionViewModel> Sessions { get; } = new();
 
+    /// <summary>
+    /// Raised when a session asks for its connection to be edited. This view-model has no dialogs or
+    /// store, so it only relays: MainViewModel listens and does the work.
+    /// </summary>
+    public event EventHandler<SessionViewModel>? EditSessionRequested;
+
     /// <summary>True when at least one session tab is open (drives the content vs. empty-state view).</summary>
     public bool HasSessions => Sessions.Count > 0;
 
@@ -51,14 +57,24 @@ public sealed partial class SessionsViewModel : ObservableObject
         }
 
         var session = new SessionViewModel(connection, _protector);
+        session.EditRequested += OnSessionEditRequested;
         Sessions.Add(session);
         SelectedSession = session;
         return session;
     }
 
+    private void OnSessionEditRequested(object? sender, EventArgs e)
+    {
+        if (sender is SessionViewModel session)
+        {
+            EditSessionRequested?.Invoke(this, session);
+        }
+    }
+
     /// <summary>Closes and removes a session tab.</summary>
     public void CloseSession(SessionViewModel session)
     {
+        session.EditRequested -= OnSessionEditRequested;
         Sessions.Remove(session);
         if (ReferenceEquals(SelectedSession, session))
         {

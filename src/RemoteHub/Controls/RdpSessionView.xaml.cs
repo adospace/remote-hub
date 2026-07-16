@@ -130,6 +130,14 @@ public partial class RdpSessionView : UserControl
         {
             Owner = Window.GetWindow(this),
         };
+
+        // The pop-out builds its own SessionViewModel, which nothing has wired to the editor, so its
+        // toolbar Edit button would be inert. Forward it through the in-tab session (still alive —
+        // pop-out only disconnects it) to reach MainViewModel. Both sessions share one RdpConnection,
+        // so this edits the right thing. If the tab is closed while the pop-out stays open, the
+        // forward goes nowhere and its Edit button stops working — the main window still edits it.
+        window.Session.EditRequested += (_, _) => _vm.EditCommand.Execute(null);
+
         _client?.Disconnect();
         _vm.Status = SessionStatus.Disconnected;
         window.Show();
