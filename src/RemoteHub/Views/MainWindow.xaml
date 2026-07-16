@@ -132,16 +132,36 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="8,8,0,0"
-                                Padding="12,0" SnapsToDevicePixels="True">
-                            <ContentPresenter x:Name="Content" ContentSource="Header"
-                                              VerticalAlignment="Center" HorizontalAlignment="Center" />
+                        <!-- Three stacked layers, deliberately — this is a colour-matching device,
+                             not decoration. LayerFillColorDefault is a semi-transparent white, so its
+                             result depends on what sits behind it. The session surface a selected tab
+                             must merge into accumulates it three times (empty-state Grid -> the
+                             TabControlEx content Border -> RdpSessionView's toolbar strip) and lands
+                             near-white, while a single layer here sits straight on the darker caption
+                             band and lands visibly greyer — that is why the selected tab used to read
+                             as barely different from the unselected ones. Repeating the stack matches
+                             the surface exactly, in light AND dark, without hard-coding a colour.
+                             Keep these in sync if the layering of the content surface changes. -->
+                        <Border x:Name="BdUnder2" Background="Transparent" CornerRadius="8,8,0,0"
+                                SnapsToDevicePixels="True">
+                            <Border x:Name="BdUnder" Background="Transparent" CornerRadius="8,8,0,0"
+                                    SnapsToDevicePixels="True">
+                                <Border x:Name="Bd" Background="Transparent" CornerRadius="8,8,0,0"
+                                        Padding="12,0" SnapsToDevicePixels="True">
+                                    <ContentPresenter x:Name="Content" ContentSource="Header"
+                                                      VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                </Border>
+                            </Border>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </Trigger>
+                            <!-- Declared after the hover trigger so a selected tab keeps the surface
+                                 colour while hovered. -->
                             <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="BdUnder2" Property="Background" Value="{DynamicResource LayerFillColorDefaultBrush}" />
+                                <Setter TargetName="BdUnder" Property="Background" Value="{DynamicResource LayerFillColorDefaultBrush}" />
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource LayerFillColorDefaultBrush}" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                             </Trigger>
@@ -222,9 +242,13 @@
                             <!-- Header strip: a single, non-wrapping, horizontally-clipping row of
                                  tabs plus a trailing overflow ("...") button. Right margin reserves
                                  room only for the window caption buttons (~144) — the session action
-                                 bar has moved out of the caption band (req 1). -->
-                            <Grid Grid.Row="0" Panel.ZIndex="1" Margin="8,0,144,0"
-                                  shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                                 bar has moved out of the caption band (req 1).
+
+                                 IsHitTestVisibleInChrome goes on the interactive children ONLY, never
+                                 on this Grid: anything marked opts OUT of the WindowChrome caption
+                                 drag zone, so marking the whole strip made the empty space beside the
+                                 tabs dead — the window could not be dragged there. -->
+                            <Grid Grid.Row="0" Panel.ZIndex="1" Margin="8,0,144,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -232,11 +256,17 @@
 
                                 <!-- Non-wrapping tab host. Hidden H-scrollbar clips overflow to one
                                      line while still tracking ScrollableWidth (our overflow signal);
-                                     Disabled V-scrollbar pins everything to a single 40px row. -->
+                                     Disabled V-scrollbar pins everything to a single 40px row.
+                                     HorizontalAlignment=Left shrinks it to the tabs' own width (it
+                                     still grows to fill and scroll when they overflow), so the strip
+                                     claims no more of the caption band than the tabs actually need
+                                     and the rest stays draggable. -->
                                 <ScrollViewer x:Name="PART_HeaderScroller" Grid.Column="0"
                                               Focusable="False"
+                                              HorizontalAlignment="Left"
                                               HorizontalScrollBarVisibility="Hidden"
-                                              VerticalScrollBarVisibility="Disabled">
+                                              VerticalScrollBarVisibility="Disabled"
+                                              shell:WindowChrome.IsHitTestVisibleInChrome="True">
                                     <StackPanel IsItemsHost="True" Orientation="Horizontal" />
                                 </ScrollViewer>
 
@@ -244,6 +274,7 @@
                                 <ToggleButton x:Name="OverflowToggle" Grid.Column="1"
                                               Style="{StaticResource OverflowToggleButton}"
                                               ToolTip="Show all tabs"
+                                              shell:WindowChrome.IsHitTestVisibleInChrome="True"
                                               Visibility="{Binding ScrollableWidth, ElementName=PART_HeaderScroller, Converter={StaticResource GreaterThanZeroToVis}}">
                                     <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE712;" FontSize="16" />
                                 </ToggleButton>
@@ -284,7 +315,25 @@
                                     </Border>
                                 </Popup>
                             </Grid>
+                            <!-- Inset the session surface by the resize-border width. A connected
+                                 session hosts the RDP ActiveX in a WindowsFormsHost — an HWND, which
+                                 eats the mouse wherever it covers, including the window's bottom/right
+                                 resize grips (WindowChrome puts those INSIDE the client area). Without
+                                 this the window cannot be resized from those edges while connected.
+                                 Padding, not Margin, so the Border's own background fills the strip.
+                                 Maximized has nothing to resize, so it goes flush. -->
                             <Border Grid.Row="1" Background="{DynamicResource LayerFillColorDefaultBrush}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Padding" Value="0,0,6,6" />
+                                        <Style.Triggers>
+                                            <DataTrigger Value="Maximized"
+                                                         Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <Setter Property="Padding" Value="0" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid x:Name="PART_ItemsHolder" />
                             </Border>
                         </Grid>
