@@ -5,7 +5,10 @@ connections — an open-source, lightweight alternative to Remote Desktop Manage
 tree of connections; each connection opens as a tab hosting the real Windows RDP ActiveX control.
 
 **Read [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the full architecture, subsystems, and
-verification techniques before making non-trivial changes.**
+verification techniques before making non-trivial changes.** For packaging, releases, and the
+auto-update banner, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (planned — not yet implemented).
+
+Repo: <https://github.com/adospace/remote-hub> (default branch `main`).
 
 ## Commands
 ```
@@ -20,6 +23,13 @@ Runtime data + logs: `%AppData%\RemoteHub\` (`connections.json`, `settings.json`
 - `src/RemoteHub.Core` — models, JSON storage, RDM import, crypto vault. No UI. Fully unit-tested.
 - `src/RemoteHub` — WPF app (MVVM via CommunityToolkit.Mvvm; DI via Microsoft.Extensions.DependencyInjection).
 - `tests/RemoteHub.Tests` — xUnit. Add Core tests here for Core changes.
+
+## Deployment & auto-update (NEXT TASK — not built yet)
+Planned: **Velopack** packaging + a tag-triggered **GitHub Actions** workflow that publishes the
+installer to the **Releases** page, plus an in-app **auto-update banner**. Modeled on the SideDoc app
+(`C:\Source\ado\side-doc`) but using **GitHub Releases as the update feed** (`GithubSource`) and
+**unsigned** (no code-signing cert). Full step-by-step plan + code snippets: **`docs/DEPLOYMENT.md`**.
+Start a fresh session for this and follow that doc.
 
 ## Hard constraints — do NOT violate (each caused a real bug)
 1. **No `<COMReference>`** — breaks `dotnet build` (MSB4803). RDP uses `AxHost` + `dynamic` (`RdpClientHost`).

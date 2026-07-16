@@ -35,6 +35,20 @@ The connection tree above was produced by importing [`docs/sample-rdm-export.xml
 - [.NET 10 SDK](https://dotnet.microsoft.com/)
 - Windows (the app is `net10.0-windows`, x64, and depends on the Windows RDP ActiveX control)
 
+## Install & updates
+
+> **Planned — not yet available.** Installers and in-app auto-update are the next milestone; see
+> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Until then, build from source (below).
+
+Once shipped, tagged releases will publish a Windows installer (`RemoteHub-Setup.exe`) to the
+[Releases page](https://github.com/adospace/remote-hub/releases), built with
+[Velopack](https://velopack.io). The app checks for updates on startup and shows an **update banner**
+when a newer version is available — one click downloads it and restarts into the new version.
+
+The installer is **not code-signed** (this is a free, open-source project without a certificate), so
+Windows SmartScreen may show an *"unknown publisher"* prompt on first run — choose
+*More info → Run anyway*.
+
 ## Build & Run
 
 ```
