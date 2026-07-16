@@ -3,52 +3,28 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:RemoteHub.ViewModels"
         xmlns:controls="clr-namespace:RemoteHub.Controls"
-        Title="RemoteHub" Height="800" Width="1200"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="RemoteHub" Height="800" Width="1200" MinWidth="820" MinHeight="480"
         Icon="pack://application:,,,/Assets/app.ico"
+        WindowStyle="None"
+        Background="{DynamicResource SolidBackgroundFillColorBaseAltBrush}"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d">
+
+    <!-- Custom chrome: the top 40px is the draggable caption; buttons/tabs/splitter opt back
+         into hit testing via WindowChrome.IsHitTestVisibleInChrome so they stay clickable. -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="40"
+                            ResizeBorderThickness="6"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-        <!-- Segoe Fluent icon glyph. -->
-        <Style x:Key="GlyphIcon" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="16" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
-        </Style>
-
-        <!-- Subtle, borderless command-bar button (transparent until hover). -->
-        <Style x:Key="CommandBarButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-            <Setter Property="Padding" Value="10,6" />
-            <Setter Property="Margin" Value="1,0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6"
-                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
 
         <!-- Tree row: Fluent glyph (folder / open folder / monitor) + name. -->
         <HierarchicalDataTemplate DataType="{x:Type vm:TreeNodeViewModel}"
@@ -61,21 +37,34 @@
                                   Visibility="{Binding IsConnection, Converter={StaticResource BoolToVis}}"
                                   Command="{Binding PlacementTarget.Tag.ConnectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem Header="Pin"
+                                  Visibility="{Binding CanPin, Converter={StaticResource BoolToVis}}"
+                                  Command="{Binding PlacementTarget.Tag.PinNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem Header="Unpin"
+                                  Visibility="{Binding CanUnpin, Converter={StaticResource BoolToVis}}"
+                                  Command="{Binding PlacementTarget.Tag.UnpinNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         <Separator Visibility="{Binding IsConnection, Converter={StaticResource BoolToVis}}" />
                         <MenuItem Header="New Folder"
+                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
                                   Command="{Binding PlacementTarget.Tag.NewFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         <MenuItem Header="New Connection"
+                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
                                   Command="{Binding PlacementTarget.Tag.NewConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <Separator />
+                        <Separator Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}" />
                         <MenuItem Header="Edit"
+                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
                                   Command="{Binding PlacementTarget.Tag.EditNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         <MenuItem Header="Rename"
+                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
                                   Command="{Binding PlacementTarget.Tag.RenameNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         <MenuItem Header="Delete"
+                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
                                   Command="{Binding PlacementTarget.Tag.DeleteNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     </ContextMenu>
@@ -101,6 +90,11 @@
                                     </MultiDataTrigger.Conditions>
                                     <Setter Property="Text" Value="&#xE838;" />
                                 </MultiDataTrigger>
+                                <!-- Synthetic Pinned group -> pin glyph, accent colour. -->
+                                <DataTrigger Binding="{Binding IsPinnedContainer}" Value="True">
+                                    <Setter Property="Text" Value="&#xE718;" />
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </TextBlock.Style>
@@ -109,13 +103,14 @@
             </StackPanel>
         </HierarchicalDataTemplate>
 
-        <!-- Tab header: connection name + close button. -->
+        <!-- Tab header: connection name + close button. The per-session actions live centered on
+             top of the RDP surface (see RdpSessionView). -->
         <DataTemplate x:Key="SessionHeaderTemplate" DataType="{x:Type vm:SessionViewModel}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;" FontSize="14" Margin="0,0,8,0"
                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                 <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <Button Style="{StaticResource CommandBarButton}" Padding="4" ToolTip="Close"
+                <Button Style="{StaticResource TabActionButton}" ToolTip="Close"
                         Command="{Binding DataContext.Sessions.CloseTabCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
                         CommandParameter="{Binding}">
                     <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE711;" FontSize="12" />
@@ -128,144 +123,333 @@
             <controls:RdpSessionView />
         </DataTemplate>
 
-        <!-- TabControlEx keeps each session's view (and live RDP control) alive across tab switches. -->
+        <!-- Modern Fluent "card" tab: rounded top, subtle hover, selected tab merges into the
+             content surface below it. -->
+        <Style x:Key="FluentTabItem" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="2,0,0,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="8,8,0,0"
+                                Padding="12,0" SnapsToDevicePixels="True">
+                            <ContentPresenter x:Name="Content" ContentSource="Header"
+                                              VerticalAlignment="Center" HorizontalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource LayerFillColorDefaultBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Compact toggle that opens the "show all tabs" overflow menu (glyph E712). -->
+        <Style x:Key="OverflowToggleButton" TargetType="ToggleButton">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Menu-like row for the overflow list (borderless, rounded hover/selection). The selected
+             row's fill doubles as the "current tab" indicator. -->
+        <Style x:Key="OverflowListItem" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- TabControlEx keeps each session's view (and live RDP control) alive across tab switches.
+             The header strip lives in the top caption band (fixed 40px, hit-test-visible), leaving
+             room on the right for the window caption buttons. -->
         <Style TargetType="{x:Type controls:TabControlEx}">
+            <Setter Property="ItemContainerStyle" Value="{StaticResource FluentTabItem}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type controls:TabControlEx}">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="40" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
-                            <TabPanel Grid.Row="0" IsItemsHost="True" Panel.ZIndex="1" />
-                            <Grid x:Name="PART_ItemsHolder" Grid.Row="1" Margin="0,4,0,0" />
+                            <!-- Header strip: a single, non-wrapping, horizontally-clipping row of
+                                 tabs plus a trailing overflow ("...") button. Right margin reserves
+                                 room only for the window caption buttons (~144) — the session action
+                                 bar has moved out of the caption band (req 1). -->
+                            <Grid Grid.Row="0" Panel.ZIndex="1" Margin="8,0,144,0"
+                                  shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Non-wrapping tab host. Hidden H-scrollbar clips overflow to one
+                                     line while still tracking ScrollableWidth (our overflow signal);
+                                     Disabled V-scrollbar pins everything to a single 40px row. -->
+                                <ScrollViewer x:Name="PART_HeaderScroller" Grid.Column="0"
+                                              Focusable="False"
+                                              HorizontalScrollBarVisibility="Hidden"
+                                              VerticalScrollBarVisibility="Disabled">
+                                    <StackPanel IsItemsHost="True" Orientation="Horizontal" />
+                                </ScrollViewer>
+
+                                <!-- Overflow menu: visible only when the strip actually overflows. -->
+                                <ToggleButton x:Name="OverflowToggle" Grid.Column="1"
+                                              Style="{StaticResource OverflowToggleButton}"
+                                              ToolTip="Show all tabs"
+                                              Visibility="{Binding ScrollableWidth, ElementName=PART_HeaderScroller, Converter={StaticResource GreaterThanZeroToVis}}">
+                                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE712;" FontSize="16" />
+                                </ToggleButton>
+
+                                <Popup Placement="Bottom" StaysOpen="False" AllowsTransparency="True"
+                                       PopupAnimation="Fade" HorizontalOffset="-206"
+                                       PlacementTarget="{Binding ElementName=OverflowToggle}"
+                                       IsOpen="{Binding IsChecked, ElementName=OverflowToggle, Mode=TwoWay}"
+                                       DataContext="{Binding RelativeSource={RelativeSource TemplatedParent}}">
+                                    <Border Background="{DynamicResource SolidBackgroundFillColorBaseAltBrush}"
+                                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                            BorderThickness="1" CornerRadius="8" Padding="4"
+                                            MinWidth="240" MaxHeight="440" Margin="6,6,6,10">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.35" Direction="270" />
+                                        </Border.Effect>
+                                        <!-- Plain paths resolve against the Popup DataContext (= the
+                                             TabControlEx set just above). SelectedItem TwoWay switches
+                                             the tab; ItemsSource is the live Sessions collection. -->
+                                        <ListBox Background="Transparent" BorderThickness="0"
+                                                 ItemContainerStyle="{StaticResource OverflowListItem}"
+                                                 PreviewMouseLeftButtonUp="OnOverflowItemClicked"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 ItemsSource="{Binding ItemsSource}"
+                                                 SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:SessionViewModel}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;"
+                                                                   FontSize="14" Margin="0,0,10,0"
+                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                            <Border Grid.Row="1" Background="{DynamicResource LayerFillColorDefaultBrush}">
+                                <Grid x:Name="PART_ItemsHolder" />
+                            </Border>
                         </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Window caption buttons (minimize / maximize-restore / close). -->
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close button: red hover, matching the Windows caption convention. -->
+        <Style x:Key="CloseCaptionButton" TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter x:Name="Cp" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#C42B1C" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#B02616" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
     </Window.Resources>
 
+    <!-- Root: two columns (nav | content) split by a full-height splitter that sits on the nav
+         pane's right edge, so the content half starts flush against the divider. Two rows: the
+         40px caption band and the body. -->
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="NavColumn" Width="300" MinWidth="220" />
+            <ColumnDefinition Width="*" MinWidth="420" />
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="40" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Command bar. -->
-        <Border Grid.Row="0"
+        <!-- Left surface + full-height divider on its right edge. -->
+        <Border Grid.Column="0" Grid.RowSpan="2"
                 Background="{DynamicResource SolidBackgroundFillColorBaseAltBrush}"
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                BorderThickness="0,0,0,1">
-            <DockPanel LastChildFill="False" Margin="8,6">
-                <Image DockPanel.Dock="Left" Width="22" Height="22" VerticalAlignment="Center"
-                       Margin="6,0,10,0" Source="pack://application:,,,/Assets/app-icon.png"
-                       RenderOptions.BitmapScalingMode="HighQuality" />
-                <TextBlock DockPanel.Dock="Left" Text="RemoteHub" FontWeight="SemiBold" FontSize="14"
-                           VerticalAlignment="Center" Margin="0,0,20,0" />
+                BorderThickness="0,0,1,0" />
 
-                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
-                        Command="{Binding ImportRdmCommand}" ToolTip="Import connections from an RDM export">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE8B5;" Margin="0,0,8,0" />
-                        <TextBlock Text="Import" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
-                        Command="{Binding NewFolderCommand}" ToolTip="New folder">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE8F4;" Margin="0,0,8,0" />
-                        <TextBlock Text="New Folder" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
-                        Command="{Binding NewConnectionCommand}" ToolTip="New connection">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE710;" Margin="0,0,8,0" />
-                        <TextBlock Text="New Connection" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button DockPanel.Dock="Left" Style="{StaticResource CommandBarButton}"
-                        Command="{Binding SaveCommand}" ToolTip="Save connections">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE74E;" Margin="0,0,8,0" />
-                        <TextBlock Text="Save" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-
-                <!-- Settings, docked to the far right with a gear glyph. -->
-                <Button DockPanel.Dock="Right" Style="{StaticResource CommandBarButton}"
-                        Command="{Binding OpenSettingsCommand}" ToolTip="Settings">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE713;" Margin="0,0,8,0" />
-                        <TextBlock Text="Settings" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-            </DockPanel>
-        </Border>
-
-        <!-- Body: nav pane + splitter + content. -->
-        <Grid Grid.Row="1">
+        <!-- Left toolbar: app icon + name on the left, compact action buttons on the right. -->
+        <Grid Grid.Column="0" Grid.Row="0" Margin="12,0,6,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" MinWidth="200" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left: connection tree on its own surface. -->
-            <Border Grid.Column="0"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseAltBrush}"
-                    BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                    BorderThickness="0,0,1,0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="CONNECTIONS" FontWeight="SemiBold" FontSize="11"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               Margin="16,14,12,8" />
-                    <TreeView x:Name="ConnectionsTree" Grid.Row="1"
-                              Background="Transparent" BorderThickness="0" Padding="6,0,6,8"
-                              ItemsSource="{Binding RootNodes}"
-                              SelectedItemChanged="OnTreeSelectedItemChanged"
-                              MouseDoubleClick="OnTreeMouseDoubleClick"
-                              KeyDown="OnTreeKeyDown">
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                    </TreeView>
-                </Grid>
-            </Border>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <Image Width="20" Height="20" VerticalAlignment="Center" Margin="0,0,10,0"
+                       Source="pack://application:,,,/Assets/app-icon.png"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+                <TextBlock Text="RemoteHub" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+            </StackPanel>
 
-            <GridSplitter Grid.Column="1" Width="6" Background="Transparent"
-                          HorizontalAlignment="Center" VerticalAlignment="Stretch" />
-
-            <!-- Right: content surface with an empty state + session tabs. -->
-            <Grid Grid.Column="2" Background="{DynamicResource LayerFillColorDefaultBrush}">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Visibility="{Binding Sessions.NoSessions, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;" FontSize="48"
-                               HorizontalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                    <TextBlock Text="No active sessions" FontSize="18" Margin="0,16,0,4"
-                               HorizontalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Text="Select a connection and press Enter, or double-click it to connect."
-                               HorizontalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                </StackPanel>
-
-                <controls:TabControlEx Background="Transparent" BorderThickness="0" Margin="8"
-                            Visibility="{Binding Sessions.HasSessions, Converter={StaticResource BoolToVis}}"
-                            ItemsSource="{Binding Sessions.Sessions}"
-                            SelectedItem="{Binding Sessions.SelectedSession}"
-                            ItemTemplate="{StaticResource SessionHeaderTemplate}"
-                            ContentTemplate="{StaticResource SessionContentTemplate}" />
-            </Grid>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <Button Style="{StaticResource IconBarButton}" Command="{Binding NewFolderCommand}"
+                        ToolTip="New folder">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE8F4;" />
+                </Button>
+                <Button Style="{StaticResource IconBarButton}" Command="{Binding NewConnectionCommand}"
+                        ToolTip="New connection">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE710;" />
+                </Button>
+                <Button Style="{StaticResource IconBarButton}" Command="{Binding OpenSettingsCommand}"
+                        ToolTip="Settings">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE713;" />
+                </Button>
+            </StackPanel>
         </Grid>
+
+        <!-- Left: connection tree fills the rest of the nav pane. -->
+        <TreeView x:Name="ConnectionsTree" Grid.Column="0" Grid.Row="1"
+                  Background="Transparent" BorderThickness="0" Padding="6,4,6,8"
+                  ItemsSource="{Binding RootNodes}"
+                  SelectedItemChanged="OnTreeSelectedItemChanged"
+                  MouseDoubleClick="OnTreeMouseDoubleClick"
+                  KeyDown="OnTreeKeyDown">
+            <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                </Style>
+            </TreeView.ItemContainerStyle>
+        </TreeView>
+
+        <!-- Full-height splitter pinned to the nav pane's right edge (over the divider), so the
+             content half aligns flush against the border. -->
+        <GridSplitter Grid.Column="0" Grid.RowSpan="2" Width="6" Background="Transparent"
+                      HorizontalAlignment="Right" VerticalAlignment="Stretch" Panel.ZIndex="5"
+                      ResizeBehavior="CurrentAndNext" ResizeDirection="Columns"
+                      shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+
+        <!-- Right content surface (empty state). -->
+        <Grid Grid.Column="1" Grid.Row="1" Background="{DynamicResource LayerFillColorDefaultBrush}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Visibility="{Binding Sessions.NoSessions, Converter={StaticResource BoolToVis}}">
+                <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;" FontSize="48"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <TextBlock Text="No active sessions" FontSize="18" Margin="0,16,0,4"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="Select a connection and press Enter, or double-click it to connect."
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Session tabs: header strip sits in the caption band, content fills the body. -->
+        <controls:TabControlEx Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                    Background="Transparent" BorderThickness="0"
+                    Visibility="{Binding Sessions.HasSessions, Converter={StaticResource BoolToVis}}"
+                    ItemsSource="{Binding Sessions.Sessions}"
+                    SelectedItem="{Binding Sessions.SelectedSession}"
+                    ItemTemplate="{StaticResource SessionHeaderTemplate}"
+                    ContentTemplate="{StaticResource SessionContentTemplate}" />
+
+        <!-- Window caption buttons, pinned to the top-right of the content half. -->
+        <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="10"
+                    shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Button Style="{StaticResource CaptionButton}" Click="OnMinimizeClick"
+                    ToolTip="Minimize" Content="&#xE921;" />
+            <Button x:Name="MaxRestoreButton" Style="{StaticResource CaptionButton}"
+                    Click="OnMaximizeRestoreClick" ToolTip="Maximize" Content="&#xE922;" />
+            <Button Style="{StaticResource CloseCaptionButton}" Click="OnCloseClick"
+                    ToolTip="Close" Content="&#xE8BB;" />
+        </StackPanel>
     </Grid>
 </Window>

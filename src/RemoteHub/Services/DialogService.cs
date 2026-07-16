@@ -64,6 +64,9 @@ public sealed class DialogService : IDialogService
     public bool Confirm(string title, string message) =>
         MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 
+    public void Inform(string title, string message) =>
+        MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+
     public string? PromptMasterPassword(string title, string message)
     {
         var dialog = new MasterPasswordDialog(confirmMode: false, title, message) { Owner = ActiveWindow };

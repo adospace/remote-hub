@@ -105,10 +105,23 @@ master-password re-encryption and path changes are reflected.
 
 ### Data model & storage
 - `ConnectionNode` (abstract) → `FolderNode` (has `Children`) or `RdpConnection` (host, port,
-  username, domain, description, `EncryptedPassword?`, `Display`). **No plaintext password field.**
+  username, domain, description, `EncryptedPassword?`, `IsPinned`, `Display`). **No plaintext
+  password field.** `IsPinned` is a presentation flag (see Tree below) — the node keeps its real
+  place in the document.
 - `ConnectionDocument` = `{ Version=2, Security: VaultHeader?, Roots: List<ConnectionNode> }`.
 - `ConnectionStore` loads/saves the document; **save is atomic** (temp file then move). Missing file
   → empty document.
+
+### Tree (`MainViewModel.RebuildTree`)
+- The document is the single source of truth; the tree is a projection. **All mutations** (add /
+  rename / edit / delete / pin / unpin) change the document and then call `RebuildTree()` +
+  `SaveDocumentAsync()` — there is no surgical VM patching. Rebuild **preserves folder expansion**
+  (captured/restored by node `Id`) so it isn't visually disruptive.
+- **Sorting:** every level is folders-first, then connections, each alphabetical (case-insensitive).
+- **Pinned:** connections with `IsPinned` are surfaced in a synthetic **"Pinned"** group at the top
+  (a `TreeNodeViewModel` with `IsPinnedContainer = true`, backed by a throwaway `FolderNode` that is
+  *not* in the document) and hidden from their normal folder. Pin/Unpin live on the connection
+  context menu; the container itself exposes no edit/structural actions (`IsRealNode = false`).
 
 ### Settings
 - `SettingsService` persists `AppSettings` to `%AppData%\RemoteHub\settings.json`. `Load()` always
@@ -159,14 +172,51 @@ A `TabControl` subclass that keeps **one `ContentPresenter` per item alive** (vi
 instead of the default single-shared-presenter behaviour. Required so each tab keeps its own live
 `RdpSessionView`/RDP control; without it, switching tabs would not switch the active remote desktop.
 
+The tab header (`SessionHeaderTemplate`) is just the connection name + a close button. The
+per-session actions (connect / disconnect / reconnect / full-screen / pop-out) are a **compact,
+icon-only, centered toolbar docked at the top of `RdpSessionView`**, just below the tab strip. It
+binds to the `SessionViewModel`'s *own* commands (the view's DataContext), so it always targets its
+own tab. It is a real **docked** strip (not a WPF overlay over the `WindowsFormsHost` — that would be
+occluded by airspace when connected), using the small `TabActionButton` style (now in `App.xaml`).
+
+**Non-wrapping tab strip + overflow menu.** The default `TabPanel` *wraps* to extra rows when tabs
+don't fit; it is replaced (in the `TabControlEx` template) by a `StackPanel` (`IsItemsHost`) inside a
+`ScrollViewer` (`HorizontalScrollBarVisibility=Hidden`, `VerticalScrollBarVisibility=Disabled`) so
+tabs stay on **one clipped row**. A trailing "…" `ToggleButton` (glyph `E712`) appears only when the
+strip overflows — its `Visibility` binds to `ScrollViewer.ScrollableWidth` via
+`GreaterThanZeroToVisibilityConverter`. Clicking it opens a `Popup` whose `ListBox` is bound to the
+live `ItemsSource`/`SelectedItem` of the `TabControlEx` (its `DataContext` is the `TemplatedParent`),
+so selecting a row switches tabs. `TabControlEx.OnSelectionChanged` calls `BringIntoView` on the
+selected container so a tab chosen from the overflow menu scrolls into view. The header strip's right
+margin (144) reserves room only for the window caption buttons.
+
+**No duplicate tabs.** `SessionsViewModel.OpenSession` first looks for an existing session whose
+`Connection` is the same instance (or same `Id`); if found it just re-selects that tab instead of
+opening a second one.
+
 ### UI & theming
 - Fluent look via WPF's built-in **`Application.ThemeMode`** (System/Light/Dark), applied by
   `ThemeManager`. Experimental API → `WPF0001` is suppressed in the csproj.
-- `MainWindow`: a top command bar (Segoe Fluent Icons buttons + Settings gear), a left nav pane
-  (tree, starts collapsed), and the content area (empty-state placeholder or session tabs). Surfaces
-  use Fluent theme brushes (`SolidBackgroundFillColorBaseAltBrush`, `LayerFillColorDefaultBrush`,
-  `DividerStrokeColorDefaultBrush`, `AccentTextFillColorPrimaryBrush`, `TextFillColor*`, etc.) via
-  `DynamicResource` so they follow the theme.
+- **Custom window chrome.** `MainWindow` uses `WindowStyle="None"` + `WindowChrome` (40px caption).
+  The window is split into two halves by a full-height `GridSplitter` pinned to the **right edge of
+  the nav column** (`HorizontalAlignment=Right`, `ResizeBehavior=CurrentAndNext`) so the content half
+  starts flush against the divider. The **left half** is the nav pane (a compact toolbar — app icon +
+  "RemoteHub" + new-folder / new-connection / settings buttons — over a tree that fills the rest);
+  the **right half** is the content, with the session **tab strip in the caption band** and the
+  window's minimize / maximize / close buttons at the top-right. There is no separate top command bar
+  and no Save button — every edit auto-saves, and Import lives in the Settings dialog.
+- Interactive elements inside the 40px caption (the toolbar buttons, the `TabPanel`, the splitter,
+  the caption buttons) must set `WindowChrome.IsHitTestVisibleInChrome="True"`, or the caption
+  swallows their clicks as window-drag. `MainWindow.xaml.cs` handles `WM_GETMINMAXINFO` so a
+  maximized borderless window fills the monitor work area instead of covering the taskbar.
+- Shared button/icon styles (`GlyphIcon`, `CommandBarButton`, `IconBarButton`) live in **`App.xaml`**
+  so the main window, the RDP session toolbar, and dialogs share one visual language. Surfaces use
+  Fluent theme brushes (`SolidBackgroundFillColorBaseAltBrush`, `LayerFillColorDefaultBrush`,
+  `DividerStrokeColorDefaultBrush`, `AccentTextFillColorPrimaryBrush`, `SubtleFillColor*`,
+  `TextFillColor*`, etc.) via `DynamicResource` so they follow the theme.
+- **Build/run path gotcha:** the *solution* build outputs to `bin/x64/Debug/…`, but building the app
+  `.csproj` directly (`dotnet build src/RemoteHub/RemoteHub.csproj`) outputs to `bin/Debug/…`
+  (AnyCPU). Launch whichever you just built, or always build the solution, so you don't run a stale exe.
 
 ### Diagnostics (`RemoteHub.Diagnostics.Log`)
 Thread-safe file logger to `%AppData%\RemoteHub\logs\`. `App` installs handlers for

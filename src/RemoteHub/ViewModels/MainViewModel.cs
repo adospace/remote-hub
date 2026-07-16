@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using RemoteHub.Core.Import;
 using RemoteHub.Core.Models;
 using RemoteHub.Core.Security;
 using RemoteHub.Core.Services;
@@ -13,12 +12,12 @@ namespace RemoteHub.ViewModels;
 
 /// <summary>
 /// Root view-model for the main window. Owns the loaded document, the tree, and the top-level
-/// commands (import, add/edit/delete nodes, save, settings, connect).
+/// commands (add/edit/delete nodes, settings, connect). All edits persist automatically; there is
+/// no explicit save, and importing lives in the settings dialog.
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IConnectionStore _store;
-    private readonly IConnectionImporter _importer;
     private readonly IDialogService _dialogs;
     private readonly ISettingsService _settingsService;
     private readonly ICredentialProtector _protector;
@@ -30,7 +29,6 @@ public sealed partial class MainViewModel : ObservableObject
 
     public MainViewModel(
         IConnectionStore store,
-        IConnectionImporter importer,
         IDialogService dialogs,
         ISettingsService settings,
         ICredentialProtector protector,
@@ -38,7 +36,6 @@ public sealed partial class MainViewModel : ObservableObject
         IServiceProvider services)
     {
         _store = store;
-        _importer = importer;
         _dialogs = dialogs;
         _settingsService = settings;
         _protector = protector;
@@ -106,13 +103,50 @@ public sealed partial class MainViewModel : ObservableObject
 
     // --- Tree construction -------------------------------------------------
 
-    private void RebuildTree()
+    /// <summary>
+    /// Rebuilds the tree from the document: a "Pinned" group of pinned connections on top, then the
+    /// normal roots. Every level is sorted (folders first, then connections, each alphabetical) and
+    /// pinned connections are hidden from their normal position. Folder expansion is preserved across
+    /// the rebuild.
+    /// </summary>
+    private void RebuildTree(Guid? alsoExpand = null)
     {
-        RootNodes.Clear();
-        foreach (var node in _document.Roots)
+        var expanded = CollectExpandedFolderIds();
+        if (alsoExpand is { } id)
         {
+            expanded.Add(id);
+        }
+
+        RootNodes.Clear();
+
+        // Pinned group (synthetic — not part of the document).
+        var pinned = EnumerateConnections(_document.Roots).Where(c => c.IsPinned).ToList();
+        if (pinned.Count > 0)
+        {
+            var container = new TreeNodeViewModel(new FolderNode { Name = "Pinned" })
+            {
+                IsPinnedContainer = true,
+                IsExpanded = true,
+            };
+            foreach (var connection in pinned.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase))
+            {
+                container.Children.Add(new TreeNodeViewModel(connection));
+            }
+
+            RootNodes.Add(container);
+        }
+
+        foreach (var node in Sort(_document.Roots))
+        {
+            if (node is RdpConnection { IsPinned: true })
+            {
+                continue; // shown in the Pinned group instead
+            }
+
             RootNodes.Add(BuildNode(node));
         }
+
+        RestoreExpandedFolders(expanded);
     }
 
     private static TreeNodeViewModel BuildNode(ConnectionNode model)
@@ -120,8 +154,13 @@ public sealed partial class MainViewModel : ObservableObject
         var vm = new TreeNodeViewModel(model);
         if (model is FolderNode folder)
         {
-            foreach (var child in folder.Children)
+            foreach (var child in Sort(folder.Children))
             {
+                if (child is RdpConnection { IsPinned: true })
+                {
+                    continue; // pinned connections live in the top-level Pinned group
+                }
+
                 vm.Children.Add(BuildNode(child));
             }
         }
@@ -129,39 +168,70 @@ public sealed partial class MainViewModel : ObservableObject
         return vm;
     }
 
+    /// <summary>Folders first, then connections; each group alphabetical (case-insensitive).</summary>
+    private static IEnumerable<ConnectionNode> Sort(IEnumerable<ConnectionNode> nodes) =>
+        nodes.OrderBy(n => n is FolderNode ? 0 : 1)
+             .ThenBy(n => n.Name, StringComparer.CurrentCultureIgnoreCase);
+
+    private HashSet<Guid> CollectExpandedFolderIds()
+    {
+        var set = new HashSet<Guid>();
+        void Walk(IEnumerable<TreeNodeViewModel> vms)
+        {
+            foreach (var vm in vms)
+            {
+                if (vm is { IsFolder: true, IsExpanded: true, IsPinnedContainer: false })
+                {
+                    set.Add(vm.Node.Id);
+                }
+
+                Walk(vm.Children);
+            }
+        }
+
+        Walk(RootNodes);
+        return set;
+    }
+
+    private void RestoreExpandedFolders(HashSet<Guid> ids)
+    {
+        void Walk(IEnumerable<TreeNodeViewModel> vms)
+        {
+            foreach (var vm in vms)
+            {
+                if (vm is { IsFolder: true, IsPinnedContainer: false } && ids.Contains(vm.Node.Id))
+                {
+                    vm.IsExpanded = true;
+                }
+
+                Walk(vm.Children);
+            }
+        }
+
+        Walk(RootNodes);
+    }
+
+    private static IEnumerable<RdpConnection> EnumerateConnections(IEnumerable<ConnectionNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is RdpConnection connection)
+            {
+                yield return connection;
+            }
+            else if (node is FolderNode folder)
+            {
+                foreach (var child in EnumerateConnections(folder.Children))
+                {
+                    yield return child;
+                }
+            }
+        }
+    }
+
     private Task SaveDocumentAsync() => _store.SaveAsync(_connectionsPath, _document);
 
     // --- Commands ----------------------------------------------------------
-
-    [RelayCommand]
-    private async Task ImportRdmAsync()
-    {
-        var path = _dialogs.PickImportFile();
-        if (path is null)
-        {
-            return;
-        }
-
-        ConnectionDocument imported;
-        try
-        {
-            imported = _importer.ImportFile(path);
-        }
-        catch (Exception ex)
-        {
-            _dialogs.Confirm("Import failed", $"Could not import the selected file.\n\n{ex.Message}");
-            return;
-        }
-
-        // Merge imported roots into the current document (append, keep existing).
-        foreach (var root in imported.Roots)
-        {
-            _document.Roots.Add(root);
-            RootNodes.Add(BuildNode(root));
-        }
-
-        await SaveDocumentAsync();
-    }
 
     [RelayCommand]
     private async Task NewFolderAsync(TreeNodeViewModel? node)
@@ -189,9 +259,6 @@ public sealed partial class MainViewModel : ObservableObject
         editor.ApplyTo(connection);
         await AddChildAsync(connection, node ?? SelectedNode);
     }
-
-    [RelayCommand]
-    private Task SaveAsync() => SaveDocumentAsync();
 
     [RelayCommand]
     private async Task OpenSettingsAsync()
@@ -240,7 +307,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (_dialogs.EditConnection(editor) == true)
             {
                 editor.ApplyTo(connection);
-                target.Name = connection.Name;
+                RebuildTree();   // name may have changed -> re-sort
                 await SaveDocumentAsync();
             }
         }
@@ -254,7 +321,7 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task RenameNodeAsync(TreeNodeViewModel? node)
     {
         var target = node ?? SelectedNode;
-        if (target is null)
+        if (target is null || target.IsPinnedContainer)
         {
             return;
         }
@@ -265,15 +332,40 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        target.Name = name;      // OnNameChanged keeps the model in sync
+        target.Node.Name = name;
+        RebuildTree();           // keep the level alphabetically sorted
         await SaveDocumentAsync();
+    }
+
+    [RelayCommand]
+    private async Task PinNodeAsync(TreeNodeViewModel? node)
+    {
+        var target = node ?? SelectedNode;
+        if (target?.Node is RdpConnection connection)
+        {
+            connection.IsPinned = true;
+            RebuildTree();
+            await SaveDocumentAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task UnpinNodeAsync(TreeNodeViewModel? node)
+    {
+        var target = node ?? SelectedNode;
+        if (target?.Node is RdpConnection connection)
+        {
+            connection.IsPinned = false;
+            RebuildTree();
+            await SaveDocumentAsync();
+        }
     }
 
     [RelayCommand]
     private async Task DeleteNodeAsync(TreeNodeViewModel? node)
     {
         var target = node ?? SelectedNode;
-        if (target is null)
+        if (target is null || target.IsPinnedContainer)
         {
             return;
         }
@@ -283,13 +375,14 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (TryRemove(RootNodes, _document.Roots, target))
+        if (RemoveFromModel(_document.Roots, target.Node))
         {
             if (ReferenceEquals(SelectedNode, target))
             {
                 SelectedNode = null;
             }
 
+            RebuildTree();
             await SaveDocumentAsync();
         }
     }
@@ -298,38 +391,33 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task AddChildAsync(ConnectionNode model, TreeNodeViewModel? target)
     {
-        var childVm = BuildNode(model);
-        if (target?.Node is FolderNode folder)
+        // The pinned group is not a real container: add into the pinned connection's real parent.
+        var parent = target is { IsPinnedContainer: false, Node: FolderNode folder } ? folder : null;
+        if (parent is not null)
         {
-            folder.Children.Add(model);
-            target.Children.Add(childVm);
-            target.IsExpanded = true;
+            parent.Children.Add(model);
+            RebuildTree(alsoExpand: parent.Id);
         }
         else
         {
             _document.Roots.Add(model);
-            RootNodes.Add(childVm);
+            RebuildTree();
         }
 
         await SaveDocumentAsync();
     }
 
-    /// <summary>Removes <paramref name="target"/> from the matching VM and model collections.</summary>
-    private static bool TryRemove(
-        ObservableCollection<TreeNodeViewModel> vmList,
-        List<ConnectionNode> modelList,
-        TreeNodeViewModel target)
+    /// <summary>Removes <paramref name="target"/> from the document tree by reference.</summary>
+    private static bool RemoveFromModel(List<ConnectionNode> nodes, ConnectionNode target)
     {
-        if (vmList.Contains(target))
+        if (nodes.Remove(target))
         {
-            vmList.Remove(target);
-            modelList.Remove(target.Node);
             return true;
         }
 
-        foreach (var vm in vmList)
+        foreach (var node in nodes)
         {
-            if (vm.Node is FolderNode folder && TryRemove(vm.Children, folder.Children, target))
+            if (node is FolderNode folder && RemoveFromModel(folder.Children, target))
             {
                 return true;
             }

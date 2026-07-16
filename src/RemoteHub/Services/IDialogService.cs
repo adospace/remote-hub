@@ -22,6 +22,9 @@ public interface IDialogService
     /// <summary>Shows a yes/no confirmation dialog.</summary>
     bool Confirm(string title, string message);
 
+    /// <summary>Shows an informational message with an OK button.</summary>
+    void Inform(string title, string message);
+
     /// <summary>Prompts for a single line of text. Returns null if cancelled.</summary>
     string? Prompt(string title, string label, string initialValue);
 

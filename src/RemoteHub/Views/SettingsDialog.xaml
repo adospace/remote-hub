@@ -6,12 +6,15 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Settings" Height="360" Width="480"
+        Title="Settings" Height="470" Width="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False">
-    <Grid Margin="16">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -23,26 +26,33 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Theme" Margin="0,0,0,4" />
+        <TextBlock Grid.Row="0" Text="Theme" FontWeight="SemiBold" Margin="0,0,0,4" />
         <ComboBox Grid.Row="1" Width="200" HorizontalAlignment="Left"
                   ItemsSource="{Binding Themes}"
                   SelectedItem="{Binding Theme}" />
 
-        <TextBlock Grid.Row="2" Text="Connections file" Margin="0,16,0,4" />
+        <TextBlock Grid.Row="2" Text="Connections file" FontWeight="SemiBold" Margin="0,20,0,4" />
         <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox Grid.Column="0" Text="{Binding ConnectionsFilePath}" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Padding="12,2"
+            <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Padding="12,4"
                     Command="{Binding BrowseCommand}" />
         </Grid>
 
-        <TextBlock Grid.Row="4" Text="Master password" FontWeight="SemiBold" Margin="0,20,0,4" />
-        <TextBlock Grid.Row="5" Text="{Binding MasterPasswordStatus}" TextWrapping="Wrap"
-                   Foreground="Gray" FontSize="12" Margin="0,0,0,8" />
-        <StackPanel Grid.Row="6" Orientation="Horizontal">
+        <TextBlock Grid.Row="4" Text="Import" FontWeight="SemiBold" Margin="0,20,0,4" />
+        <TextBlock Grid.Row="5" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,8"
+                   Text="Import connections from a Remote Desktop Manager (RDM) XML export. Existing connections are kept; passwords are never imported." />
+        <Button Grid.Row="6" HorizontalAlignment="Left" Padding="12,4"
+                Content="Import from RDM…" Command="{Binding ImportRdmCommand}" />
+
+        <TextBlock Grid.Row="7" Text="Master password" FontWeight="SemiBold" Margin="0,20,0,4" />
+        <TextBlock Grid.Row="8" Text="{Binding MasterPasswordStatus}" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,0,0,8" />
+        <StackPanel Grid.Row="9" Orientation="Horizontal">
             <Button Content="{Binding MasterPasswordButtonText}" Padding="12,4"
                     Command="{Binding SetOrChangeMasterPasswordCommand}" />
             <Button Content="Remove…" Padding="12,4" Margin="8,0,0,0"
@@ -50,7 +60,7 @@
                     IsEnabled="{Binding CanRemoveMasterPassword}" />
         </StackPanel>
 
-        <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+        <StackPanel Grid.Row="11" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="Save" Width="80" Margin="0,0,8,0" IsDefault="True" Click="OnOk" />
             <Button Content="Cancel" Width="80" IsCancel="True" />
         </StackPanel>

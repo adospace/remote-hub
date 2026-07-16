@@ -32,6 +32,22 @@ public sealed partial class TreeNodeViewModel : ObservableObject
     /// <summary>True for leaf connection nodes (used to gate the Connect action).</summary>
     public bool IsConnection => !IsFolder;
 
+    /// <summary>
+    /// True for the synthetic "Pinned" group at the top of the tree. It is not part of the document,
+    /// so structural/edit commands do not apply to it.
+    /// </summary>
+    public bool IsPinnedContainer { get; init; }
+
+    /// <summary>True when this leaf connection is currently pinned.</summary>
+    public bool IsPinned => Node is RdpConnection { IsPinned: true };
+
+    /// <summary>Context-menu gates: pin a normal connection, unpin a pinned one.</summary>
+    public bool CanPin => IsConnection && !IsPinnedContainer && !IsPinned;
+    public bool CanUnpin => IsConnection && IsPinned;
+
+    /// <summary>Real (document-backed) nodes support edit/rename/delete/new; the pinned group does not.</summary>
+    public bool IsRealNode => !IsPinnedContainer;
+
     public ObservableCollection<TreeNodeViewModel> Children { get; } = new();
 
     partial void OnNameChanged(string value) => Node.Name = value;

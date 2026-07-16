@@ -18,6 +18,12 @@ public sealed class RdpConnection : ConnectionNode
     public string? Description { get; set; }
 
     /// <summary>
+    /// When true, the connection is surfaced in a "Pinned" group at the top of the tree instead of
+    /// its normal folder position. Purely a presentation flag; the node keeps its place in the document.
+    /// </summary>
+    public bool IsPinned { get; set; }
+
+    /// <summary>
     /// The saved password encrypted under the master key (opaque base64 token), or null if no
     /// password is stored. Never contains plaintext. Produced/read via <c>ICredentialProtector</c>.
     /// </summary>

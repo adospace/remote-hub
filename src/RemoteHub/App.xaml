@@ -1,6 +1,67 @@
 <Application x:Class="RemoteHub.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:RemoteHub.Converters">
     <Application.Resources>
+        <conv:GreaterThanZeroToVisibilityConverter x:Key="GreaterThanZeroToVis" />
+
+        <!-- Shared visual language. These live at the application level so every window and
+             user control (the main window, the RDP session toolbar, dialogs) draws from one
+             set of Fluent-flavoured styles. Theme brushes are pulled via DynamicResource so
+             they follow the active Fluent ThemeMode (System/Light/Dark). -->
+
+        <!-- Segoe Fluent icon glyph. -->
+        <Style x:Key="GlyphIcon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+        </Style>
+
+        <!-- Subtle, borderless command-bar button (transparent until hover). -->
+        <Style x:Key="CommandBarButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Margin" Value="1,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Square, icon-only variant used for the compact left-pane actions (new folder /
+             new connection / settings) and the RDP session toolbar. -->
+        <Style x:Key="IconBarButton" TargetType="Button" BasedOn="{StaticResource CommandBarButton}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <!-- Compact icon-only button (glyph-sized, no fixed box) for the per-session action
+             toolbar in RdpSessionView and the tab-header close button in MainWindow. Smaller
+             than IconBarButton so the docked RDP toolbar wastes minimal vertical space. -->
+        <Style x:Key="TabActionButton" TargetType="Button" BasedOn="{StaticResource CommandBarButton}">
+            <Setter Property="Padding" Value="5,3" />
+            <Setter Property="Margin" Value="1,0" />
+        </Style>
     </Application.Resources>
 </Application>

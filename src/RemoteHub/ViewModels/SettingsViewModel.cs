@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RemoteHub.Core.Import;
 using RemoteHub.Core.Models;
 using RemoteHub.Core.Security;
 using RemoteHub.Core.Services;
@@ -17,6 +18,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
     private readonly IConnectionStore _store;
+    private readonly IConnectionImporter _importer;
     private readonly ICredentialProtector _protector;
     private readonly ThemeManager _themeManager;
     private readonly IDialogService _dialogs;
@@ -36,12 +38,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(
         ISettingsService settingsService,
         IConnectionStore store,
+        IConnectionImporter importer,
         ICredentialProtector protector,
         ThemeManager themeManager,
         IDialogService dialogs)
     {
         _settingsService = settingsService;
         _store = store;
+        _importer = importer;
         _protector = protector;
         _themeManager = themeManager;
         _dialogs = dialogs;
@@ -92,6 +96,47 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             ConnectionsFilePath = path;
         }
+    }
+
+    /// <summary>
+    /// Imports connections from an RDM export and appends them to the persisted document. The main
+    /// window reloads the document (and rebuilds the tree) after the settings dialog closes, so the
+    /// imported connections appear then.
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportRdmAsync()
+    {
+        var file = _dialogs.PickImportFile();
+        if (file is null)
+        {
+            return;
+        }
+
+        ConnectionDocument imported;
+        try
+        {
+            imported = _importer.ImportFile(file);
+        }
+        catch (Exception ex)
+        {
+            _dialogs.Inform("Import failed", $"Could not import the selected file.\n\n{ex.Message}");
+            return;
+        }
+
+        var path = CurrentConnectionsPath();
+        var doc = await _store.LoadAsync(path);
+        var count = imported.Roots.Count;
+        foreach (var root in imported.Roots)
+        {
+            doc.Roots.Add(root);
+        }
+
+        await _store.SaveAsync(path, doc);
+        _dialogs.Inform(
+            "Import complete",
+            count == 0
+                ? "No connections were found to import."
+                : $"Imported {count} item(s). They will appear in the tree once you close Settings.");
     }
 
     /// <summary>Sets a master password (first time) or changes it (re-encrypting saved passwords).</summary>

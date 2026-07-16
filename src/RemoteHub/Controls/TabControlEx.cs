@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 // UseWindowsForms pulls WinForms into scope; pin the ambiguous types to their WPF versions.
 using TabControl = System.Windows.Controls.TabControl;
 using Panel = System.Windows.Controls.Panel;
@@ -30,6 +31,28 @@ public sealed class TabControlEx : TabControl
     {
         base.OnSelectionChanged(e);
         UpdateSelectedItem();
+        BringSelectedTabIntoView();
+    }
+
+    // Scroll the selected tab's header into view — e.g. when it was chosen from the overflow menu
+    // and currently sits off-screen in the clipped, non-wrapping header strip. BringIntoView bubbles
+    // a RequestBringIntoView that the header ScrollViewer honours.
+    private void BringSelectedTabIntoView()
+    {
+        var selected = SelectedItem;
+        if (selected is null)
+        {
+            return;
+        }
+
+        // A freshly added tab's container may not be realized yet; defer until after layout.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (ItemContainerGenerator.ContainerFromItem(selected) is FrameworkElement container)
+            {
+                container.BringIntoView();
+            }
+        }));
     }
 
     protected override void OnItemsChanged(NotifyCollectionChangedEventArgs e)

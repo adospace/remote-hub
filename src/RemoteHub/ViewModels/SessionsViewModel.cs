@@ -34,9 +34,22 @@ public sealed partial class SessionsViewModel : ObservableObject
     /// <summary>True when no session tabs are open.</summary>
     public bool NoSessions => Sessions.Count == 0;
 
-    /// <summary>Opens a new session for the connection and selects it.</summary>
+    /// <summary>
+    /// Opens a session for the connection and selects it. If a tab is already open for the SAME
+    /// connection — matched by reference (the tree reuses the same <see cref="RdpConnection"/>
+    /// instances) and, as a fallback, by <see cref="ConnectionNode.Id"/> — that existing tab is
+    /// re-selected and returned instead of opening a duplicate.
+    /// </summary>
     public SessionViewModel OpenSession(RdpConnection connection)
     {
+        var existing = Sessions.FirstOrDefault(
+            s => ReferenceEquals(s.Connection, connection) || s.Connection.Id == connection.Id);
+        if (existing is not null)
+        {
+            SelectedSession = existing;
+            return existing;
+        }
+
         var session = new SessionViewModel(connection, _protector);
         Sessions.Add(session);
         SelectedSession = session;

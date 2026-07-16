@@ -11,21 +11,46 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </UserControl.Resources>
 
-    <DockPanel>
-        <ToolBar DockPanel.Dock="Top">
-            <Button Content="Connect" Command="{Binding ConnectCommand}" ToolTip="Connect this session" />
-            <Button Content="Disconnect" Command="{Binding DisconnectCommand}" ToolTip="Disconnect" />
-            <Button Content="Reconnect" Command="{Binding ReconnectCommand}" ToolTip="Disconnect and connect again" />
-            <Separator />
-            <Button Content="Full Screen" Command="{Binding FullScreenCommand}" ToolTip="Enter the RDP full-screen mode" />
-            <Button Content="Pop-out" Command="{Binding PopOutCommand}" ToolTip="Open this session in a separate window" />
-            <Separator />
-            <TextBlock VerticalAlignment="Center" Margin="6,0" Text="{Binding StatusText}" />
-        </ToolBar>
+    <!-- Root is a DockPanel: a compact icon-only session toolbar docks at the top as a real
+         strip (NOT a WPF overlay over the WindowsFormsHost, which would be occluded by airspace
+         once connected). The host + disconnected overlay fill the rest (LastChildFill). -->
+    <DockPanel LastChildFill="True">
 
-        <!-- Host and overlay never render at the same time: a WindowsFormsHost always paints above
-             WPF content (airspace), so we collapse the host while disconnected and show the WPF
-             overlay in its place. -->
+        <!-- Session actions: centered, icon-only, tab-header button size (TabActionButton).
+             DataContext is the SessionViewModel, so bind straight to its commands. -->
+        <Border DockPanel.Dock="Top"
+                Background="{DynamicResource LayerFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2">
+                <Button Style="{StaticResource TabActionButton}" ToolTip="Connect"
+                        Command="{Binding ConnectCommand}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE768;" FontSize="13"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                </Button>
+                <Button Style="{StaticResource TabActionButton}" ToolTip="Disconnect"
+                        Command="{Binding DisconnectCommand}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE71A;" FontSize="13" />
+                </Button>
+                <Button Style="{StaticResource TabActionButton}" ToolTip="Reconnect"
+                        Command="{Binding ReconnectCommand}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE72C;" FontSize="13" />
+                </Button>
+                <Border Width="1" Margin="5,4" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                <Button Style="{StaticResource TabActionButton}" ToolTip="Full screen"
+                        Command="{Binding FullScreenCommand}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE740;" FontSize="13" />
+                </Button>
+                <Button Style="{StaticResource TabActionButton}" ToolTip="Pop out to a separate window"
+                        Command="{Binding PopOutCommand}">
+                    <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE8A7;" FontSize="13" />
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- Remote surface + disconnected overlay. Host and overlay never render at the same time:
+             a WindowsFormsHost always paints above WPF content (airspace), so we collapse the host
+             while disconnected and show the WPF overlay in its place. -->
         <Grid>
             <wf:WindowsFormsHost x:Name="RdpHostContainer"
                                  Visibility="{Binding IsSessionActive, Converter={StaticResource BoolToVis}}" />
