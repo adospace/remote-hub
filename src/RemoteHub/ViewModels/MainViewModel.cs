@@ -22,6 +22,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly ICredentialProtector _protector;
     private readonly SessionsViewModel _sessions;
+    private readonly UpdateViewModel _update;
     private readonly IServiceProvider _services;
 
     private ConnectionDocument _document = new();
@@ -33,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
         ISettingsService settings,
         ICredentialProtector protector,
         SessionsViewModel sessions,
+        UpdateViewModel update,
         IServiceProvider services)
     {
         _store = store;
@@ -40,11 +42,15 @@ public sealed partial class MainViewModel : ObservableObject
         _settingsService = settings;
         _protector = protector;
         _sessions = sessions;
+        _update = update;
         _services = services;
     }
 
     /// <summary>Open RDP session tabs, surfaced for the main window's TabControl.</summary>
     public SessionsViewModel Sessions => _sessions;
+
+    /// <summary>Backs the update banner's DataContext.</summary>
+    public UpdateViewModel Update => _update;
 
     /// <summary>Top-level nodes shown in the tree.</summary>
     public ObservableCollection<TreeNodeViewModel> RootNodes { get; } = new();
@@ -73,6 +79,10 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         RebuildTree();
+
+        // Fire-and-forget: the check self-delays 5s and swallows its own failures, so the banner
+        // never blocks or breaks startup.
+        _ = _update.CheckForUpdatesOnStartupAsync();
     }
 
     /// <summary>Prompts for the master password until it unlocks the vault or the user cancels.</summary>

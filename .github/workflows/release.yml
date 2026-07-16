@@ -1,0 +1,204 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:        # run from the Actions tab with a vX.Y.Z tag selected as the ref
+
+permissions:
+  contents: write           # create the GitHub Release and upload its assets
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_QUALITY: 'ga'
+  PROJECT_PATH: 'src/RemoteHub/RemoteHub.csproj'
+  PACK_ID: 'com.adospace.remotehub'
+  REPO_URL: 'https://github.com/adospace/remote-hub'
+  # Must match <PackageReference Include="Velopack" ... /> in src/RemoteHub/RemoteHub.csproj.
+  # Change both together.
+  VELOPACK_VERSION: '1.2.0'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  release-windows:
+    name: Build, pack and publish (win-x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # full history so release notes can diff against the previous tag
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: ${{ env.DOTNET_QUALITY }}
+
+      - name: Install Velopack CLI
+        shell: pwsh
+        run: |
+          # Pinned to the same version as the Velopack PackageReference in RemoteHub.csproj.
+          # The packer validates the library version it finds in the packDir, so the two must be
+          # bumped together — an unpinned tool would silently drift onto a newer vpk and either
+          # fail the pack step or emit a package the pinned UpdateManager cannot read.
+          dotnet tool install -g vpk --version $env:VELOPACK_VERSION
+          # The runner image normally has this on PATH already; make it explicit so a
+          # change to the image can't silently break `vpk` resolution in later steps.
+          "$env:USERPROFILE\.dotnet\tools" | Add-Content -Path $env:GITHUB_PATH -Encoding utf8
+
+      - name: Resolve version from tag
+        id: version
+        shell: pwsh
+        env:
+          # Passed as env rather than inlined: a tag name is user-controlled text and
+          # must never be pasted into the script body.
+          TAG: ${{ github.ref_name }}
+          REF: ${{ github.ref }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          # workflow_dispatch can be started from any ref; a release only makes sense from a tag.
+          if ($env:REF_TYPE -ne 'tag') {
+            Write-Error "This workflow must run on a tag ref. Got '$($env:REF)'. Re-run it from the Actions tab with a vX.Y.Z tag selected."
+            exit 1
+          }
+
+          $tag = $env:TAG
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$') {
+            Write-Error "Tag '$tag' is not of the form vX.Y.Z or vX.Y.Z-prerelease."
+            exit 1
+          }
+
+          $version = $Matches[1]
+          "version=$version" | Add-Content -Path $env:GITHUB_OUTPUT -Encoding utf8
+          Write-Host "Tag: $tag -> version: $version"
+
+      - name: Generate release notes
+        id: release_notes
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # `git describe` exits non-zero when no earlier tag exists (the first release).
+          # That is expected here, so stop pwsh from turning it into a terminating error.
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $tag = $env:TAG
+          $file = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          $lines = @("## What's new in $tag", "")
+
+          $previousTag = git describe --tags --abbrev=0 "$tag^" 2>$null | Select-Object -First 1
+          if ($LASTEXITCODE -eq 0 -and $previousTag) {
+            Write-Host "Previous tag: $previousTag"
+            $commits = git log --no-merges --pretty=format:'- %s' "$previousTag..$tag"
+            if ($commits) { $lines += $commits } else { $lines += '- Maintenance release' }
+          } else {
+            Write-Host 'No previous tag found; emitting initial-release notes.'
+            $lines += '- Initial release with auto-update support'
+          }
+
+          # Velopack embeds these notes in the nuspec XML — escape so a commit message
+          # containing & < > cannot produce invalid XML. '&' must be replaced first.
+          $content = ($lines -join "`n") -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;'
+          Set-Content -Path $file -Value $content -Encoding utf8 -NoNewline
+
+          Write-Host '--- release notes ---'
+          Get-Content $file
+          "notes_file=$file" | Add-Content -Path $env:GITHUB_OUTPUT -Encoding utf8
+
+          # The pwsh shell wrapper ends with `exit $LASTEXITCODE`. On a first release the
+          # failed `git describe` leaves 128 there (no native command resets it afterwards),
+          # which would fail this step. Exit explicitly.
+          exit 0
+
+      - name: Publish (win-x64, self-contained, folder layout)
+        shell: pwsh
+        run: |
+          # Velopack requires a FOLDER publish — PublishSingleFile must stay false.
+          dotnet publish $env:PROJECT_PATH `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=false `
+            -p:Version=${{ steps.version.outputs.version }} `
+            -o publish/app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          if (-not (Test-Path 'publish/app/RemoteHub.exe')) {
+            Write-Error 'publish/app/RemoteHub.exe not found — the publish layout is wrong.'
+            exit 1
+          }
+
+      - name: Download previous release (seeds delta generation)
+        shell: pwsh
+        env:
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Velopack builds deltas by diffing the new package against the previous *-full.nupkg
+          # already sitting in --outputDir. The runner starts empty, so without this step every
+          # release would be a full ~150MB download for every user. Seed the dir from the feed.
+          #
+          # The first release has nothing to download; that is expected, so don't let a non-zero
+          # native exit code terminate the step (same idiom as the release-notes step above).
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          & vpk download github --repoUrl $env:REPO_URL --token $env:VPK_TOKEN --outputDir publish/releases
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'No previous release found — packing a full release only.'
+          }
+          exit 0
+
+      - name: Pack with Velopack
+        shell: pwsh
+        run: |
+          # Argument array (not backtick continuation) so values with spaces survive intact.
+          $vpkArgs = @(
+            'pack',
+            '--packId', $env:PACK_ID,
+            '--packVersion', '${{ steps.version.outputs.version }}',
+            '--packDir', 'publish/app',
+            '--mainExe', 'RemoteHub.exe',
+            '--packTitle', 'RemoteHub',
+            '--icon', 'src/RemoteHub/Assets/app.ico',
+            '--releaseNotes', '${{ steps.release_notes.outputs.notes_file }}',
+            '--outputDir', 'publish/releases'
+          )
+          & vpk @vpkArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Write-Host '--- Velopack output ---'
+          Get-ChildItem -Path 'publish/releases' -Recurse | Select-Object Name, Length
+
+      - name: Publish release to GitHub
+        shell: pwsh
+        env:
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NAME: RemoteHub ${{ github.ref_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # vpk uploads the whole Velopack asset set (Setup.exe, *-full.nupkg, deltas,
+          # releases.win.json, assets.win.json) — GithubSource needs all of it to serve
+          # updates. Uploading only Setup.exe would break the auto-update feed.
+          $vpkArgs = @(
+            'upload', 'github',
+            '--repoUrl', $env:REPO_URL,
+            '--publish',
+            '--releaseName', $env:RELEASE_NAME,
+            '--tag', $env:TAG,
+            '--token', $env:VPK_TOKEN,
+            '--outputDir', 'publish/releases'
+          )
+
+          # A semver prerelease tag (v1.2.0-beta.1) must be flagged as a prerelease on GitHub.
+          # vpk does NOT infer this from the version string, and GithubSource filters on GitHub's
+          # own prerelease boolean — so without --pre a beta becomes the latest STABLE release and
+          # is auto-shipped to every stable user, irreversibly.
+          if ('${{ steps.version.outputs.version }}' -match '-') {
+            Write-Host 'Prerelease version detected — marking the GitHub release as a prerelease.'
+            $vpkArgs += '--pre'
+          }
+
+          & vpk @vpkArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

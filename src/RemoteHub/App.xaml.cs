@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Application = System.Windows.Application;
@@ -123,9 +123,25 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ThemeManager>();
 
+        // Auto-update: the feed is this repo's GitHub Releases page. An empty RepoUrl disables
+        // updates, which is what debug builds want (they have no Velopack install context).
+        // NOTE: `UpdateOptions` here is RemoteHub.Services.UpdateOptions. Velopack has a type of the
+        // same name, so adding `using Velopack;` to THIS file breaks the build (CS0104, ambiguous
+        // reference). Velopack stays confined to Program.cs and WindowsUpdateService.cs.
+        services.AddSingleton(new UpdateOptions
+        {
+#if DEBUG
+            RepoUrl = ""
+#else
+            RepoUrl = "https://github.com/adospace/remote-hub"
+#endif
+        });
+        services.AddSingleton<IUpdateService, WindowsUpdateService>();
+
         // View-models.
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<SessionsViewModel>();
+        services.AddSingleton<UpdateViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<ConnectionEditorViewModel>();
 

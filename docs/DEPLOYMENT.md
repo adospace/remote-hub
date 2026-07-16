@@ -1,218 +1,179 @@
-# Deployment & Auto-Update — implementation plan
+# Deployment & Auto-Update
 
-**Status: NOT yet implemented.** This is the hand-off plan for the next session. When you pick this
-up, implement Parts A and B, verify a real release end-to-end, then update this file's status and the
-README's install section.
+**Status: implemented.** Velopack packaging, the tag-triggered GitHub Actions workflow, and the
+in-app update banner are all in the tree and build clean. **The pipeline has not yet been exercised
+against a real tag** — no `v*` tag has ever been pushed, so the first release (`v0.1.0`) is also the
+first live test of `release.yml`. Expect to iterate on the workflow when that happens.
 
-## Goal
+## What ships
 
-1. Package RemoteHub as a Windows installer (`Setup.exe`) with **[Velopack](https://velopack.io)**.
-2. A **GitHub Actions** workflow that, on a version tag (`vX.Y.Z`), builds → packs → publishes the
-   installer **to the repo's Releases page**.
-3. An in-app **auto-update banner** that appears when a newer version is available (auto-downloads,
-   then offers *Restart to update*) — the feature the owner liked in SideDoc.
-4. **No code-signing certificate** → the build is unsigned (see the SmartScreen note in Part B).
+1. RemoteHub is packaged as a Windows installer (`*-Setup.exe`) with **[Velopack](https://velopack.io)**.
+2. Pushing a version tag (`vX.Y.Z`) runs **`.github/workflows/release.yml`**, which builds → packs →
+   publishes the installer and its update feed **to the repo's Releases page**.
+3. The app checks for updates 5s after startup, auto-downloads a newer version, and shows a banner
+   offering **Restart to update**.
+4. **No code-signing certificate** → the installer is unsigned (see [SmartScreen](#no-code-signing--smartscreen)).
 
-## Reference implementation: SideDoc
+## How the pieces fit
 
-Model this on the SideDoc app at `C:\Source\ado\side-doc`. Copy/adapt these files:
+```
+git tag v0.1.0 && git push origin v0.1.0
+        │
+        ▼
+.github/workflows/release.yml           (windows-latest)
+        │  dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=false -o publish/app
+        │  vpk download github …        ← seeds publish/releases with the PREVIOUS release
+        │  vpk pack …                   → Setup.exe + *-full.nupkg + *-delta.nupkg + releases.win.json
+        │  vpk upload github --publish  → GitHub Release for the tag, all assets attached
+        ▼
+GitHub Releases page  ──── GithubSource ────►  WindowsUpdateService  ──►  UpdateViewModel  ──►  UpdateBar
+   (the update feed)                            (Velopack UpdateManager)   (5s check, auto-DL)   (banner)
+```
 
-| Concern | SideDoc file |
+### Where each piece lives
+
+| Concern | File |
 | --- | --- |
-| CI workflow | `.github/workflows/build-and-deploy.yml` (desktop job only) |
-| Velopack bootstrap | `src/SideDoc.AppWindow/App.xaml.cs` → `VelopackApp.Build().Run();` (first line of `Main`) |
-| Update service iface | `src/SideDoc.AppCore/Services/IUpdateService.cs` (`IUpdateService`, `UpdateInfo`, `UpdateStatus`, `UpdateOptions`) |
-| Update service impl | `src/SideDoc.AppWindow/Services/WindowsUpdateService.cs` (Velopack `UpdateManager`) |
-| Banner view-model | `src/SideDoc.AppWindow/ViewModels/UpdateViewModel.cs` (5s startup check → auto-download → restart) |
-| Banner control | `src/SideDoc.AppWindow/Controls/UpdateBar.xaml(.cs)` |
-| DI registration | `src/SideDoc.AppWindow/App.xaml.cs` (~line 182: `UpdateOptions`, `IUpdateService`) |
+| CI workflow | `.github/workflows/release.yml` |
+| Velopack bootstrap | `src/RemoteHub/Program.cs` (`VelopackApp.Build().Run()` first in `Main`) |
+| Entry-point wiring | `src/RemoteHub/RemoteHub.csproj` (`<StartupObject>`, `App.xaml` as `Page`) |
+| Update service iface | `src/RemoteHub/Services/IUpdateService.cs` (`IUpdateService`, `UpdateInfo`, `UpdateStatus`, `UpdateOptions`) |
+| Update service impl | `src/RemoteHub/Services/WindowsUpdateService.cs` (Velopack `UpdateManager` + `GithubSource`) |
+| Banner view-model | `src/RemoteHub/ViewModels/UpdateViewModel.cs` |
+| Banner control | `src/RemoteHub/Controls/UpdateBar.xaml(.cs)` |
+| Banner placement | `src/RemoteHub/Views/MainWindow.xaml` (Grid row 2, `DataContext="{Binding Update}"`) |
+| Startup kick-off | `src/RemoteHub/ViewModels/MainViewModel.cs` (`_ = _update.CheckForUpdatesOnStartupAsync()`) |
+| DI registration | `src/RemoteHub/App.xaml.cs → ConfigureServices()` |
 
-**Two deliberate differences from SideDoc** (SideDoc has infra RemoteHub does not):
-- SideDoc's update **feed is Azure Storage** (`SimpleWebSource(url)`). RemoteHub has no Azure —
-  use **GitHub Releases as the feed** via `Velopack.Sources.GithubSource`.
-- SideDoc **code-signs** with Azure Trusted Signing. RemoteHub has **no certificate** — drop the
-  entire signing block; ship unsigned.
+Everything lives in the WPF app project. **`RemoteHub.Core` stays UI/dependency-free — no Velopack there.**
 
----
+## App integration notes
 
-## Part A — App integration (in `src/RemoteHub`, the WPF app)
+**Entry point.** WPF's auto-generated `Main` had to go: `VelopackApp.Build().Run()` must run before
+anything else, because it handles the install/update/uninstall hooks and may terminate the process
+outright. `RemoteHub.csproj` therefore sets `<StartupObject>RemoteHub.Program</StartupObject>` and
+removes `App.xaml` from `ApplicationDefinition`, re-adding it as a `Page` — an `ApplicationDefinition`
+generates its own `Main`, which collides with `Program.Main`. `App.OnStartup` (DI, theme, window) is
+unchanged and runs after `VelopackApp.Run()`.
 
-Keep all of this in the WPF app project; **`RemoteHub.Core` must stay UI/dependency-free** (no Velopack there).
+**Feed.** `WindowsUpdateService` builds `new GithubSource(repoUrl, accessToken: null, prerelease: false)`
+and reads the **latest GitHub Release**'s Velopack assets (`releases.win.json` + `*-full.nupkg`).
+This is why CI must upload the *full* Velopack output, not just `Setup.exe`.
 
-**A1. Package.** Add to `src/RemoteHub/RemoteHub.csproj`:
-```xml
-<PackageReference Include="Velopack" Version="<latest-stable>" />
-```
+**Graceful no-op.** Updates are disabled in two cases, and both leave the app fully functional:
+- `UpdateOptions.RepoUrl` is empty — DEBUG builds, via `#if DEBUG` in `ConfigureServices()`.
+- `UpdateManager.IsInstalled` is false — a plain `dotnet run` / xcopy build has no Velopack context.
 
-**A2. Bootstrap Velopack first.** RemoteHub currently uses WPF's auto-generated `Main`. Add an explicit
-entry point so `VelopackApp` runs before anything else:
-```csharp
-// src/RemoteHub/Program.cs
-using System;
-using Velopack;
-using Application = System.Windows.Application; // UseWindowsForms type ambiguity
+In both cases `_updateManager` stays null, `IsSupported` is false, and every method returns
+null/false. The banner simply never appears. Failures are logged via `RemoteHub.Diagnostics.Log` and
+are never fatal.
 
-namespace RemoteHub;
+**Type-ambiguity trap.** Velopack defines its own `UpdateInfo` **and** `UpdateOptions`, colliding with
+`RemoteHub.Services`' types of the same name:
+- In `App.xaml.cs`, adding `using Velopack;` breaks the build (CS0104). Velopack is confined to
+  `Program.cs` and `WindowsUpdateService.cs`.
+- In `WindowsUpdateService.cs`, only Velopack's needs an alias (`using VelopackUpdateInfo = Velopack.UpdateInfo;`)
+  — a namespace member beats a using-directive, so the unqualified names already bind locally.
 
-public static class Program
-{
-    [STAThread]
-    public static void Main()
-    {
-        // MUST be first: handles install/update/uninstall hooks, then may terminate the process.
-        VelopackApp.Build().Run();
+This is on top of the usual `UseWindowsForms` ambiguity (`Application`, `UserControl`, …) — see the
+[landmines](#landmines-see-developmentmd-6).
 
-        var app = new App();
-        app.InitializeComponent();
-        app.Run();
-    }
-}
-```
-Then set `<StartupObject>RemoteHub.Program</StartupObject>` in the csproj (this disables the
-auto-generated `Main`; `App.xaml` stays an `ApplicationDefinition`). `App.OnStartup` (DI, theme,
-window) is unchanged and runs after `VelopackApp.Run()`.
+## Decisions made during implementation
 
-**A3. Update service (GitHub feed).** Port `IUpdateService`/`UpdateInfo`/`UpdateStatus`/`UpdateOptions`
-and `WindowsUpdateService`, but build the manager from a `GithubSource`:
-```csharp
-using Velopack;
-using Velopack.Sources;
-// ...
-var source = new GithubSource("https://github.com/adospace/remote-hub", accessToken: null, prerelease: false);
-_updateManager = new UpdateManager(source);
-```
-`GithubSource` reads the **latest GitHub Release** and its Velopack assets (`releases.win.json` +
-`*-full.nupkg`). This is why the CI must upload the *full* Velopack output as release assets (Part B).
-Drop SideDoc's Serilog/Sentry calls — use RemoteHub's `RemoteHub.Diagnostics.Log` instead.
+These were open questions in the plan; here is what was actually decided.
 
-**A4. Banner view-model.** Port `UpdateViewModel`: 5-second startup delay → `CheckForUpdatesAsync` →
-if newer, auto-download → `IsUpdateDownloaded` → *Restart to update* (`ApplyUpdatesAndRestart`), plus
-Dismiss/Retry. Kick off `CheckForUpdatesOnStartupAsync()` after the main window loads.
+- **Banner placement: bottom of the window** (not the top, as originally sketched). It owns a real
+  `Auto` row (row 2) of MainWindow's root Grid, spanning both columns, so it reads as a footer under
+  the nav pane and the content half. **Why a row and not an overlay:** the RDP `WindowsFormsHost` is
+  an HWND and paints above *all* WPF content regardless of Z-order (the airspace landmine), so an
+  overlay would be invisible whenever a session is live. The `TabControlEx` covers rows 0–1 — its
+  template re-partitions that space into the 40px caption band + the body — so row 2 is the only
+  space the HWND can never reach. The root `Border` is collapsed until `IsUpdateAvailable`, so the
+  `Auto` row costs zero pixels normally.
+  - The bar's `Padding` has a load-bearing 8px bottom: `WindowChrome.ResizeBorderThickness` is 6px,
+    so controls any closer to the bottom edge are swallowed by the resize grip and become unclickable.
+- **`packId` = `com.adospace.remotehub`.** Set in `release.yml` (`PACK_ID`). **It must never change** —
+  Velopack keys the installed app's identity off it, and a change orphans every existing install.
+- **No "Check for updates" button in Settings.** `UpdateViewModel` *does* expose a
+  `CheckForUpdatesCommand` (manual check → "You're up to date."), but nothing binds it today. Wiring
+  a Settings button to it is a drop-in change if it's ever wanted.
+- **Startup flow:** 5s delay (so the check never competes with the first paint) → check → if newer,
+  show banner and auto-download → *Restart to update*. Plus Retry (download failures only) and Dismiss.
+  Kicked off fire-and-forget from `MainViewModel.LoadAsync`.
+- **First tag `v0.1.0` establishes the baseline.** Auto-update only works for Velopack-installed
+  copies, so nobody can update *into* the first release — they install it manually.
 
-**A5. Banner control.** Port `UpdateBar.xaml`, restyled with RemoteHub's Fluent brushes
-(`SolidBackgroundFillColorBaseAltBrush`, `AccentTextFillColorPrimaryBrush`, `TextFillColor*`, etc.,
-matching the rest of the app). It shows an update glyph, status text, a progress bar, and
-*Restart to update* / *Retry* / *Dismiss (×)*; the root `Border` visibility binds to `IsUpdateAvailable`.
-- **Placement (decide during impl):** a full-width strip at the **top of the content body**, above
-  the session tabs' content. **Airspace caveat** (see DEVELOPMENT.md landmines): the banner is WPF and
-  must not overlap an active session's `WindowsFormsHost`, so give it its own row *above* the tab
-  content rather than overlaying the remote surface. A clean option: wrap the content column body in a
-  `DockPanel` with the `UpdateBar` docked `Top` (Auto height, collapsed when no update) and the tab
-  content filling the rest.
+## The release workflow
 
-**A6. DI + wiring** (in `App.xaml.cs → ConfigureServices`, per the project's "all DI here" rule):
-```csharp
-services.AddSingleton(new UpdateOptions
-{
-#if DEBUG
-    RepoUrl = ""                                   // updates disabled in debug
-#else
-    RepoUrl = "https://github.com/adospace/remote-hub"
-#endif
-});
-services.AddSingleton<IUpdateService, WindowsUpdateService>();
-services.AddSingleton<UpdateViewModel>();
-```
-Expose `UpdateViewModel` off `MainViewModel` (e.g. `public UpdateViewModel Update`) and bind the
-banner's `DataContext` to it.
+`.github/workflows/release.yml` triggers on `push` of a `v*` tag (and `workflow_dispatch`, which
+validates that the selected ref *is* a tag). Beyond the plan's sketch it also:
 
-**A7. Version.** CI passes `-p:Version=X.Y.Z` (from the tag). At runtime `UpdateManager.CurrentVersion`
-reports it. In DEBUG / non-installed runs there is no Velopack context, so `CheckForUpdates` should
-no-op gracefully (guard on an empty `RepoUrl` and/or a null manager, exactly as SideDoc guards on an
-empty `UpdateUrl`).
+- **Validates the tag** against `^v(\d+\.\d+\.\d+(-prerelease)?)$` and derives `Version` from it.
+- **Generates release notes** by `git log`-ing between the previous tag and this one, XML-escaping the
+  result (Velopack embeds the notes in nuspec XML, so a `&` in a commit subject would produce
+  invalid XML), and passes them to `vpk pack --releaseNotes`.
+- **Seeds delta generation** with `vpk download github` before packing. Velopack builds deltas by
+  diffing against the previous `*-full.nupkg` **already present in `--outputDir`**; the runner starts
+  empty, so without this step every release would be a full ~150MB download for every user. A first
+  release finds nothing to download — expected, and the step tolerates it.
+- **Flags prereleases.** If the version contains `-`, `--pre` is added to `vpk upload github`. `vpk`
+  does **not** infer this from the version string, and `GithubSource` filters on GitHub's own
+  prerelease boolean — so without `--pre`, a `v1.2.0-beta.1` becomes the latest *stable* release and
+  is auto-shipped to every stable user, irreversibly.
+- **Pins the `vpk` CLI** (`VELOPACK_VERSION`) to the same version as the `Velopack` `PackageReference`
+  in `RemoteHub.csproj`. **Bump both together.** The packer validates the library version it finds in
+  the `packDir`; an unpinned tool drifts onto a newer `vpk` and either fails the pack step or emits a
+  package the pinned `UpdateManager` cannot read.
 
----
+Two `pwsh` idioms in there are deliberate, not noise:
+- `$PSNativeCommandUseErrorActionPreference = $false` around `git describe` / `vpk download`, whose
+  non-zero exit on a first release is expected.
+- The explicit `exit 0` at the end of the release-notes step: the pwsh wrapper ends with
+  `exit $LASTEXITCODE`, and a failed `git describe` leaves `128` there.
 
-## Part B — GitHub Actions workflow
+### Why `vpk upload github` and not `softprops/action-gh-release`
 
-Create `.github/workflows/release.yml`. Trigger on tag `v*`. Adapted from SideDoc, **minus Azure and
-signing**:
+`vpk upload github` creates/updates the Release for the tag and uploads **all** Velopack assets —
+`*-Setup.exe`, `*-full.nupkg`, delta `*-delta.nupkg`, `releases.win.json`, `assets.win.json` —
+which is precisely what `GithubSource` needs to serve updates. **Uploading only `Setup.exe` would
+break the auto-update feed.**
 
-```yaml
-name: Release
-on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
-permissions:
-  contents: write            # create the GitHub Release
-jobs:
-  release-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }               # full history for release notes
-      - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: '10.0.x', dotnet-quality: 'ga' }
-      - name: Install Velopack CLI
-        run: dotnet tool install -g vpk
-      - name: Version from tag
-        id: version
-        shell: pwsh
-        run: '"version=$("${{ github.ref_name }}".TrimStart(''v''))" >> $env:GITHUB_OUTPUT'
-      - name: Publish (win-x64, self-contained, folder — NOT single-file)
-        run: >
-          dotnet publish src/RemoteHub/RemoteHub.csproj
-          -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=false
-          -p:Version=${{ steps.version.outputs.version }}
-          -o publish/app
-      - name: Pack with Velopack
-        shell: pwsh
-        run: |
-          vpk pack `
-            --packId com.adospace.remotehub `
-            --packVersion ${{ steps.version.outputs.version }} `
-            --packDir publish/app `
-            --mainExe RemoteHub.exe `
-            --packTitle RemoteHub `
-            --icon src/RemoteHub/Assets/app.ico `
-            --outputDir publish/releases
-      - name: Publish release to GitHub (Velopack)
-        shell: pwsh
-        run: >
-          vpk upload github
-          --repoUrl https://github.com/adospace/remote-hub
-          --publish
-          --releaseName "RemoteHub ${{ github.ref_name }}"
-          --tag ${{ github.ref_name }}
-          --token ${{ secrets.GITHUB_TOKEN }}
-          --outputDir publish/releases
-```
+### Why a folder publish, not single-file
 
-**Why `vpk upload github` (not `softprops/action-gh-release`):** `vpk upload github` creates/updates the
-Release for the tag and uploads **all** Velopack assets (`*-Setup.exe`, `*-full.nupkg`, delta
-`*-delta.nupkg`, `releases.win.json`, `assets.win.json`) — precisely what `GithubSource` needs to
-serve updates. Uploading only `Setup.exe` would break the auto-update feed.
+Velopack requires a **folder** publish (`-p:PublishSingleFile=false`). It packages a directory tree
+and applies binary deltas to individual files between releases; a single-file bundle defeats both.
 
-**No code signing:** omit SideDoc's Azure Trusted Signing steps and the `--signTemplate` arg. The
-unsigned `Setup.exe` triggers Windows **SmartScreen "Unknown publisher"** on first download/run — users
-click *More info → Run anyway*. Document this in the README. Future hardening: Azure Trusted Signing or
-a purchased OV/EV cert, then add `--signTemplate` to `vpk pack` (see SideDoc for the exact wiring).
+**Token:** the built-in `GITHUB_TOKEN` with `contents: write` is enough for same-repo releases — no PAT.
 
-**Token:** the built-in `GITHUB_TOKEN` with `contents: write` is enough for same-repo releases (no PAT).
-
----
-
-## Cutting a release (once implemented)
+## Cutting a release
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0        # → workflow builds, packs, and publishes the Release
 ```
-Users install from the `*-Setup.exe` on the Releases page. From the 2nd release on, Velopack computes
-delta updates automatically and the in-app banner offers them.
 
-## Open decisions for the implementer
+Users install from the `*-Setup.exe` on the
+[Releases page](https://github.com/adospace/remote-hub/releases). From the 2nd release on, Velopack
+computes delta updates automatically and the in-app banner offers them.
 
-- Final banner placement in the custom-chrome layout (see A5).
-- Confirm `packId` (`com.adospace.remotehub` suggested — it must stay stable across releases).
-- Optional **"Check for updates"** button in the Settings dialog (manual check), mirroring SideDoc.
-- First tag `v0.1.0` establishes the baseline (auto-update only works for Velopack-installed copies).
+## No code signing → SmartScreen
 
-## Landmines that still apply (see DEVELOPMENT.md §6)
+The installer is **unsigned** (this is a free OSS project without a certificate). Windows SmartScreen
+shows **"Windows protected your PC / Unknown publisher"** on first download/run; users click
+*More info → Run anyway*. This is expected, not a bug, and it is documented in the README.
 
-- `VelopackApp.Build().Run()` **must** be the first line of `Main`.
+**Future hardening:** obtain Azure Trusted Signing or a purchased OV/EV certificate, then add
+`--signTemplate` to `vpk pack` (SideDoc at `C:\Source\ado\side-doc` has the exact wiring, including
+the Azure Trusted Signing steps this workflow deliberately omits).
+
+## Landmines (see DEVELOPMENT.md §6)
+
+- `VelopackApp.Build().Run()` **must** stay the first statement of `Main`. Anything before it also
+  runs during the install/update/uninstall hooks.
 - Velopack requires a **folder** publish (`PublishSingleFile=false`), never single-file.
+- `App.xaml` must stay a `Page`, not an `ApplicationDefinition` — the latter generates a competing `Main`.
+- `packId` (`com.adospace.remotehub`) must stay stable across releases forever.
+- The `vpk` CLI version in `release.yml` and the `Velopack` `PackageReference` must match.
+- The update banner must own a layout row, never overlay the session surface (RDP HWND airspace).
 - `UseWindowsForms` type ambiguity → add `using X = System.Windows…;` aliases in new files
-  (`Program.cs`, the update service, the banner code-behind).
+  (`Program.cs`, the banner code-behind). Velopack adds its own `UpdateInfo`/`UpdateOptions` clash on top.

@@ -345,8 +345,8 @@
     </Window.Resources>
 
     <!-- Root: two columns (nav | content) split by a full-height splitter that sits on the nav
-         pane's right edge, so the content half starts flush against the divider. Two rows: the
-         40px caption band and the body. -->
+         pane's right edge, so the content half starts flush against the divider. Three rows: the
+         40px caption band, the body, and the update banner. -->
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="NavColumn" Width="300" MinWidth="220" />
@@ -355,6 +355,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
             <RowDefinition Height="*" />
+            <!-- Update banner: zero-height until an update is available. -->
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Left surface + full-height divider on its right edge. -->
@@ -451,5 +453,14 @@
             <Button Style="{StaticResource CloseCaptionButton}" Click="OnCloseClick"
                     ToolTip="Close" Content="&#xE8BB;" />
         </StackPanel>
+
+        <!-- Update banner: a full-width strip across the bottom of the window. It must own a real
+             layout row — a WPF overlay over the session surface would be hidden by the RDP
+             WindowsFormsHost (an HWND paints above ALL WPF content, regardless of Z-order). The
+             TabControlEx covers rows 0-1 of this Grid (its template re-partitions that space into
+             the 40px header band + the content body), so row 2 is the only space the HWND can never
+             reach. Auto row + collapsed root Border => no footprint when there is no update. -->
+        <controls:UpdateBar Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                            DataContext="{Binding Update}" />
     </Grid>
 </Window>
