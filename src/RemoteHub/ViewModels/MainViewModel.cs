@@ -242,10 +242,16 @@ public sealed partial class MainViewModel : ObservableObject
         return vm;
     }
 
-    /// <summary>Case-insensitive substring match on the node name; an empty filter matches everything.</summary>
+    /// <summary>
+    /// Case-insensitive substring match on the node name, plus a connection's host — searching for
+    /// the machine you are about to reach is as natural as searching for what it was named. An empty
+    /// filter matches everything.
+    /// </summary>
     private static bool Matches(ConnectionNode node, string filter) =>
         filter.Length == 0 ||
-        node.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
+        node.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+        (node is RdpConnection connection &&
+         connection.Host.Contains(filter, StringComparison.CurrentCultureIgnoreCase));
 
     /// <summary>Folders first, then connections; each group alphabetical (case-insensitive).</summary>
     private static IEnumerable<ConnectionNode> Sort(IEnumerable<ConnectionNode> nodes) =>

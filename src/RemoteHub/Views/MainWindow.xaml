@@ -480,7 +480,7 @@
                         </TextBox>
                         <!-- Watermark: shown only while the box is empty, and never hit-testable so
                              clicking it still lands in the TextBox underneath. -->
-                        <TextBlock Text="Search connections" VerticalAlignment="Center" Margin="2,0,0,0"
+                        <TextBlock Text="Search name or host" VerticalAlignment="Center" Margin="2,0,0,0"
                                    IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}">
                             <TextBlock.Style>
