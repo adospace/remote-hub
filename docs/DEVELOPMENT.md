@@ -132,7 +132,9 @@ master-password re-encryption and path changes are reflected.
   open or disconnected) is grey. `MainViewModel` subscribes to `Sessions.CollectionChanged` and each
   session's `PropertyChanged` (status comes from the RDP control's polling timer, so it must be
   listened for, not sampled) and pushes `TreeNodeViewModel.IsConnected`, matched by node `Id` so a
-  pinned connection lights up in the Pinned group too. Keep the accent reserved for this.
+  pinned connection lights up in the Pinned group too. The tab header and the tab overflow list
+  follow the same rule via the shared `SessionGlyph` style, bound straight to
+  `SessionViewModel.IsConnected`. Keep the accent reserved for this.
 - **Pinned:** connections with `IsPinned` are surfaced in a synthetic **"Pinned"** group at the top
   (a `TreeNodeViewModel` with `IsPinnedContainer = true`, backed by a throwaway `FolderNode` that is
   *not* in the document) and hidden from their normal folder. Pin/Unpin live on the connection

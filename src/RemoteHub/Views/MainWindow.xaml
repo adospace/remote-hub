@@ -51,6 +51,20 @@
             </Setter>
         </Style>
 
+        <!-- Session icon, shared by the tab header and the overflow list. Same rule as the tree: the
+             accent means the session is actually connected, not merely open. Bound against
+             SessionViewModel.IsConnected, which the RDP control's status polling drives. -->
+        <Style x:Key="SessionGlyph" TargetType="TextBlock" BasedOn="{StaticResource GlyphIcon}">
+            <Setter Property="Text" Value="&#xE7F4;" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Tree row: Fluent glyph (folder / open folder / monitor) + name. -->
         <HierarchicalDataTemplate DataType="{x:Type vm:TreeNodeViewModel}"
                                   ItemsSource="{Binding Children}">
@@ -146,8 +160,7 @@
              top of the RDP surface (see RdpSessionView). -->
         <DataTemplate x:Key="SessionHeaderTemplate" DataType="{x:Type vm:SessionViewModel}">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;" FontSize="14" Margin="0,0,8,0"
-                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                <TextBlock Style="{StaticResource SessionGlyph}" Margin="0,0,8,0" />
                 <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <Button Style="{StaticResource TabActionButton}" ToolTip="Close"
                         Command="{Binding DataContext.Sessions.CloseTabCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
@@ -342,9 +355,8 @@
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate DataType="{x:Type vm:SessionViewModel}">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE7F4;"
-                                                                   FontSize="14" Margin="0,0,10,0"
-                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                        <TextBlock Style="{StaticResource SessionGlyph}"
+                                                                   Margin="0,0,10,0" />
                                                         <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
                                                                    TextTrimming="CharacterEllipsis" />
                                                     </StackPanel>
