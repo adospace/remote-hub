@@ -26,6 +26,31 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
+        <!-- Editor for the search box. The stock Fluent TextBox paints its own surface, border and
+             focus underline, which showed through as a second box sitting inside the rounded border
+             around it — most visibly while typing. Setting Background/BorderThickness on the control
+             does not help: those states are painted by elements *inside* its template. So replace the
+             template with just the content host and let the surrounding Border be the only visual.
+             Losing the template also loses its built-in clear button, hence the explicit one below. -->
+        <Style x:Key="SearchTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                      Background="Transparent"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Tree row: Fluent glyph (folder / open folder / monitor) + name. -->
         <HierarchicalDataTemplate DataType="{x:Type vm:TreeNodeViewModel}"
                                   ItemsSource="{Binding Children}">
@@ -73,14 +98,16 @@
                 <TextBlock Margin="0,0,10,0">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock" BasedOn="{StaticResource GlyphIcon}">
-                            <!-- Connection (leaf): monitor glyph, accent colour. -->
+                            <!-- Everything is grey at rest. The accent is reserved for one meaning
+                                 only — this connection has a LIVE session — so a coloured row in the
+                                 tree reads as "connected" at a glance rather than just "is a
+                                 connection". Keep it that way when adding states here. -->
                             <Setter Property="Text" Value="&#xE7F4;" />
-                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                             <Style.Triggers>
                                 <!-- Folder (collapsed). -->
                                 <DataTrigger Binding="{Binding IsFolder}" Value="True">
                                     <Setter Property="Text" Value="&#xE8B7;" />
-                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </DataTrigger>
                                 <!-- Folder (expanded) -> open-folder glyph. -->
                                 <MultiDataTrigger>
@@ -90,9 +117,13 @@
                                     </MultiDataTrigger.Conditions>
                                     <Setter Property="Text" Value="&#xE838;" />
                                 </MultiDataTrigger>
-                                <!-- Synthetic Pinned group -> pin glyph, accent colour. -->
+                                <!-- Synthetic Pinned group -> pin glyph (grey: it is a container). -->
                                 <DataTrigger Binding="{Binding IsPinnedContainer}" Value="True">
                                     <Setter Property="Text" Value="&#xE718;" />
+                                </DataTrigger>
+                                <!-- Connected: the one place the accent is used. Declared last so it
+                                     wins over the states above. -->
+                                <DataTrigger Binding="{Binding IsConnected}" Value="True">
                                     <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 </DataTrigger>
                             </Style.Triggers>
@@ -461,8 +492,8 @@
             </Grid.RowDefinitions>
 
             <!-- Filter box. Typing filters the tree below as you type (SearchText is bound with
-                 UpdateSourceTrigger=PropertyChanged); Escape clears it, as does the "x" the Fluent
-                 TextBox template already draws once there is text. -->
+                 UpdateSourceTrigger=PropertyChanged); Escape or the trailing "x" clears it. This
+                 Border is the entire visual — see the SearchTextBox style. -->
             <Border Grid.Row="0" Margin="10,4,10,6" Padding="8,0" CornerRadius="6"
                     Background="{DynamicResource LayerFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
@@ -471,6 +502,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0" Style="{StaticResource GlyphIcon}" Text="&#xE721;"
@@ -478,9 +510,7 @@
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
                     <Grid Grid.Column="1">
-                        <TextBox x:Name="SearchBox" VerticalContentAlignment="Center"
-                                 Background="Transparent" BorderThickness="0" Padding="0"
-                                 Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                        <TextBox x:Name="SearchBox" Style="{StaticResource SearchTextBox}"
                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">
                             <TextBox.InputBindings>
                                 <KeyBinding Key="Esc" Command="{Binding ClearSearchCommand}" />
@@ -503,6 +533,22 @@
                             </TextBlock.Style>
                         </TextBlock>
                     </Grid>
+
+                    <!-- Clear button: only while there is something to clear. -->
+                    <Button Grid.Column="2" Command="{Binding ClearSearchCommand}" ToolTip="Clear search"
+                            Focusable="False">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource TabActionButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE711;" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Button>
                 </Grid>
             </Border>
 

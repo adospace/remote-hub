@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +52,7 @@ public sealed partial class MainViewModel : ObservableObject
         _update = update;
         _services = services;
         _sessions.EditSessionRequested += OnEditSessionRequested;
+        _sessions.Sessions.CollectionChanged += OnSessionsCollectionChanged;
     }
 
     /// <summary>Open RDP session tabs, surfaced for the main window's TabControl.</summary>
@@ -199,7 +202,57 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         RestoreExpandedFolders(expanded);
+        RefreshConnectedStates();   // the nodes are new objects; re-apply the live-session highlight
         NoSearchResults = filter.Length > 0 && RootNodes.Count == 0;
+    }
+
+    // --- Live-session highlight -------------------------------------------
+
+    // Tabs come and go, and each one's status is driven by the RDP control's polling timer, so the
+    // tree listens for both rather than sampling at rebuild time only.
+    private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (var session in e.OldItems?.OfType<SessionViewModel>() ?? [])
+        {
+            session.PropertyChanged -= OnSessionPropertyChanged;
+        }
+
+        foreach (var session in e.NewItems?.OfType<SessionViewModel>() ?? [])
+        {
+            session.PropertyChanged += OnSessionPropertyChanged;
+        }
+
+        RefreshConnectedStates();
+    }
+
+    private void OnSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(SessionViewModel.Status) or nameof(SessionViewModel.IsConnected))
+        {
+            RefreshConnectedStates();
+        }
+    }
+
+    /// <summary>
+    /// Flags the tree nodes whose connection currently has a connected session. Matched by
+    /// <see cref="ConnectionNode.Id"/>, so a pinned connection lights up in the Pinned group too.
+    /// </summary>
+    private void RefreshConnectedStates()
+    {
+        var live = _sessions.Sessions.Where(s => s.IsConnected)
+                                     .Select(s => s.Connection.Id)
+                                     .ToHashSet();
+
+        void Walk(IEnumerable<TreeNodeViewModel> vms)
+        {
+            foreach (var vm in vms)
+            {
+                vm.IsConnected = vm.Node is RdpConnection connection && live.Contains(connection.Id);
+                Walk(vm.Children);
+            }
+        }
+
+        Walk(RootNodes);
     }
 
     /// <summary>

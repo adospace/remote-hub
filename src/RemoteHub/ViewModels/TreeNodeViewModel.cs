@@ -17,6 +17,14 @@ public sealed partial class TreeNodeViewModel : ObservableObject
     [ObservableProperty]
     private bool _isExpanded;
 
+    /// <summary>
+    /// True while an open session for this connection is actually connected — the tree paints those
+    /// rows in the accent colour. Kept current by <c>MainViewModel</c>, which watches the session
+    /// list; a tree node has no way to know this by itself.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isConnected;
+
     public TreeNodeViewModel(ConnectionNode node)
     {
         Node = node;

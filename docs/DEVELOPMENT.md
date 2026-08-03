@@ -127,6 +127,12 @@ master-password re-encryption and path changes are reflected.
   matched on host rather than name explains itself. Surviving folders are
   force-expanded, so `RebuildTree` stashes the user's real expansion in `_expandedBeforeFilter` when
   a search starts and restores it when the box is cleared (Escape, or the Fluent `TextBox`'s own "x").
+- **Live-session highlight:** the accent colour in the tree means one thing — this connection has a
+  **connected** session. Everything else (folders, the Pinned container, connections that are merely
+  open or disconnected) is grey. `MainViewModel` subscribes to `Sessions.CollectionChanged` and each
+  session's `PropertyChanged` (status comes from the RDP control's polling timer, so it must be
+  listened for, not sampled) and pushes `TreeNodeViewModel.IsConnected`, matched by node `Id` so a
+  pinned connection lights up in the Pinned group too. Keep the accent reserved for this.
 - **Pinned:** connections with `IsPinned` are surfaced in a synthetic **"Pinned"** group at the top
   (a `TreeNodeViewModel` with `IsPinnedContainer = true`, backed by a throwaway `FolderNode` that is
   *not* in the document) and hidden from their normal folder. Pin/Unpin live on the connection
