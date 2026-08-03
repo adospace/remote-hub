@@ -101,10 +101,12 @@
                 </TextBlock>
                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                 <!-- Host, dimmed and smaller: secondary information, and the reason a row that does
-                     not look like a match shows up when searching by host. Folders have none. -->
+                     not look like a match shows up when searching by host. Folders have none.
+                     Secondary, not Tertiary: measured on the light theme's nav surface, tertiary
+                     came out at ~2:1 against the background — visibly washed out at 11px. -->
                 <TextBlock Text="{Binding Host}" VerticalAlignment="Center" Margin="8,1,0,0"
-                           FontSize="11" TextTrimming="CharacterEllipsis"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           FontSize="12" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Visibility="{Binding HasHost, Converter={StaticResource BoolToVis}}" />
             </StackPanel>
         </HierarchicalDataTemplate>
