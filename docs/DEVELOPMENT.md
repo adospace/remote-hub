@@ -118,6 +118,13 @@ master-password re-encryption and path changes are reflected.
   `SaveDocumentAsync()` — there is no surgical VM patching. Rebuild **preserves folder expansion**
   (captured/restored by node `Id`) so it isn't visually disruptive.
 - **Sorting:** every level is folders-first, then connections, each alphabetical (case-insensitive).
+- **Search:** the box above the tree (`MainViewModel.SearchText`, bound with
+  `UpdateSourceTrigger=PropertyChanged`) filters on every keystroke — it just re-runs `RebuildTree`,
+  so filtering is a projection like everything else and never touches the document. A connection
+  survives on a case-insensitive substring match of its name; a folder survives if its own name
+  matches (its whole subtree comes with it) or if any descendant matched. Surviving folders are
+  force-expanded, so `RebuildTree` stashes the user's real expansion in `_expandedBeforeFilter` when
+  a search starts and restores it when the box is cleared (Escape, or the Fluent `TextBox`'s own "x").
 - **Pinned:** connections with `IsPinned` are surfaced in a synthetic **"Pinned"** group at the top
   (a `TreeNodeViewModel` with `IsPinnedContainer = true`, backed by a throwaway `FolderNode` that is
   *not* in the document) and hidden from their normal folder. Pin/Unpin live on the connection
@@ -272,8 +279,8 @@ diagnosing a crash: this log, plus the Windows Application event log (`Applicati
 
 ## 8. Roadmap / good next tasks
 
-- **Tree UX:** drag-and-drop reordering/move; connection duplication; search/filter; optional
-  persistence of folder expansion state (currently always starts collapsed by design).
+- **Tree UX:** drag-and-drop reordering/move; connection duplication; optional persistence of folder
+  expansion state (currently always starts collapsed by design).
 - **Sessions:** per-connection "always prompt for password" toggle; idle auto-lock of the vault;
   auto-disconnect background tabs to save resources; multi-monitor / display-resolution options in
   the editor.

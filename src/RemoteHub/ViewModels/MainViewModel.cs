@@ -29,6 +29,10 @@ public sealed partial class MainViewModel : ObservableObject
     private ConnectionDocument _document = new();
     private string _connectionsPath = string.Empty;
 
+    // Expansion the user had chosen before a search forced every surviving folder open, so clearing
+    // the search box gives them back the tree they were looking at.
+    private HashSet<Guid>? _expandedBeforeFilter;
+
     public MainViewModel(
         IConnectionStore store,
         IDialogService dialogs,
@@ -63,6 +67,22 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The tree node currently selected in the TreeView.</summary>
     [ObservableProperty]
     private TreeNodeViewModel? _selectedNode;
+
+    /// <summary>
+    /// Text typed into the search box above the tree. Empty shows the whole tree; anything else
+    /// filters it (see <see cref="RebuildTree"/>).
+    /// </summary>
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
+    /// <summary>True when a search is active and nothing matched — drives the empty-state text.</summary>
+    [ObservableProperty]
+    private bool _noSearchResults;
+
+    partial void OnSearchTextChanged(string value) => RebuildTree();
+
+    [RelayCommand]
+    private void ClearSearch() => SearchText = string.Empty;
 
     /// <summary>Loads settings and the connection document, then builds the tree. Called at startup.</summary>
     public async Task InitializeAsync()
@@ -119,11 +139,26 @@ public sealed partial class MainViewModel : ObservableObject
     /// Rebuilds the tree from the document: a "Pinned" group of pinned connections on top, then the
     /// normal roots. Every level is sorted (folders first, then connections, each alphabetical) and
     /// pinned connections are hidden from their normal position. Folder expansion is preserved across
-    /// the rebuild.
+    /// the rebuild. When <see cref="SearchText"/> is non-empty the tree is filtered to matching nodes
+    /// and every surviving folder is expanded so the matches are visible without any clicking.
     /// </summary>
     private void RebuildTree(Guid? alsoExpand = null)
     {
-        var expanded = CollectExpandedFolderIds();
+        var filter = SearchText.Trim();
+
+        // A filtered tree force-expands its folders, so its expansion state says nothing about what
+        // the user wanted: capture that once when the search starts and hand it back when it ends.
+        HashSet<Guid> expanded;
+        if (filter.Length > 0)
+        {
+            expanded = _expandedBeforeFilter ??= CollectExpandedFolderIds();
+        }
+        else
+        {
+            expanded = _expandedBeforeFilter ?? CollectExpandedFolderIds();
+            _expandedBeforeFilter = null;
+        }
+
         if (alsoExpand is { } id)
         {
             expanded.Add(id);
@@ -132,7 +167,9 @@ public sealed partial class MainViewModel : ObservableObject
         RootNodes.Clear();
 
         // Pinned group (synthetic — not part of the document).
-        var pinned = EnumerateConnections(_document.Roots).Where(c => c.IsPinned).ToList();
+        var pinned = EnumerateConnections(_document.Roots)
+            .Where(c => c.IsPinned && Matches(c, filter))
+            .ToList();
         if (pinned.Count > 0)
         {
             var container = new TreeNodeViewModel(new FolderNode { Name = "Pinned" })
@@ -155,30 +192,60 @@ public sealed partial class MainViewModel : ObservableObject
                 continue; // shown in the Pinned group instead
             }
 
-            RootNodes.Add(BuildNode(node));
+            if (BuildNode(node, filter) is { } vm)
+            {
+                RootNodes.Add(vm);
+            }
         }
 
         RestoreExpandedFolders(expanded);
+        NoSearchResults = filter.Length > 0 && RootNodes.Count == 0;
     }
 
-    private static TreeNodeViewModel BuildNode(ConnectionNode model)
+    /// <summary>
+    /// Builds the view-model subtree for <paramref name="model"/>, or null when nothing in it
+    /// survives <paramref name="filter"/>. A folder whose own name matches brings its whole subtree
+    /// along; otherwise it is kept only for the sake of matching descendants.
+    /// </summary>
+    private static TreeNodeViewModel? BuildNode(ConnectionNode model, string filter)
     {
-        var vm = new TreeNodeViewModel(model);
-        if (model is FolderNode folder)
+        var selfMatches = Matches(model, filter);
+        if (model is not FolderNode folder)
         {
-            foreach (var child in Sort(folder.Children))
-            {
-                if (child is RdpConnection { IsPinned: true })
-                {
-                    continue; // pinned connections live in the top-level Pinned group
-                }
+            return selfMatches ? new TreeNodeViewModel(model) : null;
+        }
 
-                vm.Children.Add(BuildNode(child));
+        var vm = new TreeNodeViewModel(model);
+        foreach (var child in Sort(folder.Children))
+        {
+            if (child is RdpConnection { IsPinned: true })
+            {
+                continue; // pinned connections live in the top-level Pinned group
             }
+
+            if (BuildNode(child, selfMatches ? string.Empty : filter) is { } childVm)
+            {
+                vm.Children.Add(childVm);
+            }
+        }
+
+        if (!selfMatches && vm.Children.Count == 0)
+        {
+            return null;
+        }
+
+        if (filter.Length > 0)
+        {
+            vm.IsExpanded = true; // a hit buried three folders deep is no use if it stays hidden
         }
 
         return vm;
     }
+
+    /// <summary>Case-insensitive substring match on the node name; an empty filter matches everything.</summary>
+    private static bool Matches(ConnectionNode node, string filter) =>
+        filter.Length == 0 ||
+        node.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 
     /// <summary>Folders first, then connections; each group alphabetical (case-insensitive).</summary>
     private static IEnumerable<ConnectionNode> Sort(IEnumerable<ConnectionNode> nodes) =>
