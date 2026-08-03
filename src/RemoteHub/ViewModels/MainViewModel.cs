@@ -82,7 +82,59 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _noSearchResults;
 
-    partial void OnSearchTextChanged(string value) => RebuildTree();
+    /// <summary>
+    /// How long typing must pause before the tree is rebuilt. Filtering rebuilds the whole tree, so
+    /// reacting to every keystroke does N rebuilds for an N-character query and throws all but the
+    /// last one away — only the final one is ever seen.
+    /// </summary>
+    private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(250);
+
+    private CancellationTokenSource? _pendingSearch;
+
+    partial void OnSearchTextChanged(string value)
+    {
+        _pendingSearch?.Cancel();
+        _pendingSearch = null;
+
+        // Clearing the box has nothing to coalesce and should feel instant.
+        if (value.Length == 0)
+        {
+            RebuildTree();
+            return;
+        }
+
+        DebounceRebuild();
+    }
+
+    // async void because it is the tail of a property-changed handler: it must never throw.
+    private async void DebounceRebuild()
+    {
+        var cts = new CancellationTokenSource();
+        _pendingSearch = cts;
+        try
+        {
+            // Resumes on the dispatcher (the setter runs there), so the rebuild stays on the UI thread.
+            await Task.Delay(SearchDebounce, cts.Token);
+            RebuildTree();
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a later keystroke.
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Filtering the connection tree failed.", ex);
+        }
+        finally
+        {
+            if (ReferenceEquals(_pendingSearch, cts))
+            {
+                _pendingSearch = null;
+            }
+
+            cts.Dispose();
+        }
+    }
 
     [RelayCommand]
     private void ClearSearch() => SearchText = string.Empty;

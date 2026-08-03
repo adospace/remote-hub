@@ -564,8 +564,23 @@
                 </Grid>
             </Border>
 
+            <!-- Virtualization is load-bearing, not a micro-optimisation. A TreeView defaults to
+                 ScrollViewer.CanContentScroll=False, which scrolls by pixel and therefore realises a
+                 TreeViewItem for EVERY node; a search force-expands every surviving folder, so on a
+                 few thousand connections that meant tens of thousands of live containers and a UI
+                 that locked up for seconds per keystroke. CanContentScroll=True switches to
+                 item-based scrolling so only the visible rows are realised.
+
+                 VirtualizationMode stays Standard on purpose. Recycling reuses containers, and a
+                 recycled TreeViewItem writes its stale IsExpanded back through the TwoWay binding in
+                 ItemContainerStyle into whichever node it is re-attached to — which collapsed the
+                 folders a search had just expanded. Standard still virtualises; it only gives up
+                 container reuse. -->
             <TreeView x:Name="ConnectionsTree" Grid.Row="1"
                       Background="Transparent" BorderThickness="0" Padding="6,0,6,8"
+                      ScrollViewer.CanContentScroll="True"
+                      VirtualizingStackPanel.IsVirtualizing="True"
+                      VirtualizingStackPanel.VirtualizationMode="Standard"
                       ItemsSource="{Binding RootNodes}"
                       SelectedItemChanged="OnTreeSelectedItemChanged"
                       MouseDoubleClick="OnTreeMouseDoubleClick"

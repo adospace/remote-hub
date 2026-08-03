@@ -126,7 +126,24 @@ master-password re-encryption and path changes are reflected.
   rows render the host dimmed after the name (`TreeNodeViewModel.Host`/`HasHost`), so a row that
   matched on host rather than name explains itself. Surviving folders are
   force-expanded, so `RebuildTree` stashes the user's real expansion in `_expandedBeforeFilter` when
-  a search starts and restores it when the box is cleared (Escape, or the Fluent `TextBox`'s own "x").
+  a search starts and restores it when the box is cleared (Escape, or the "x").
+- **Search performance — two things keep it usable on big documents, and both matter.** Measured on
+  5 000 connections: typing a 6-character query took **~28s and wedged the app**; it now settles in
+  well under a second.
+  1. **The tree is virtualized** (`ScrollViewer.CanContentScroll="True"` on the `TreeView`). This was
+     the real fix. A `TreeView` defaults that to `False`, which scrolls by pixel and therefore
+     realizes a `TreeViewItem` for *every* node — and since a search force-expands every surviving
+     folder, thousands of containers were being built per keystroke. Keep `VirtualizationMode` on
+     **`Standard`**: `Recycling` reuses containers, and a recycled item writes its stale `IsExpanded`
+     back through the TwoWay binding in `ItemContainerStyle`, silently collapsing folders the search
+     had just expanded. It measured no faster, either.
+  2. **Typing is debounced 250 ms** (`MainViewModel.SearchDebounce`), so an N-character query causes
+     one rebuild instead of N. Clearing the box bypasses the debounce — there is nothing to coalesce
+     and it should feel instant.
+
+  **Do not "fix" this with a background thread.** The expensive part is WPF realizing and laying out
+  containers, which only happens on the UI thread; building the view-models — the part that *could*
+  move off-thread — measured 70–80 ms of a ~950 ms rebuild.
 - **Live-session highlight:** the accent colour in the tree means one thing — this connection has a
   **connected** session. Everything else (folders, the Pinned container, connections that are merely
   open or disconnected) is grey. `MainViewModel` subscribes to `Sessions.CollectionChanged` and each
