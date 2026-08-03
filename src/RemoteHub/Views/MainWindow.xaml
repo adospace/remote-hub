@@ -100,6 +100,12 @@
                     </TextBlock.Style>
                 </TextBlock>
                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                <!-- Host, dimmed and smaller: secondary information, and the reason a row that does
+                     not look like a match shows up when searching by host. Folders have none. -->
+                <TextBlock Text="{Binding Host}" VerticalAlignment="Center" Margin="8,1,0,0"
+                           FontSize="11" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Visibility="{Binding HasHost, Converter={StaticResource BoolToVis}}" />
             </StackPanel>
         </HierarchicalDataTemplate>
 

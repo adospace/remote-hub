@@ -122,8 +122,9 @@ master-password re-encryption and path changes are reflected.
   `UpdateSourceTrigger=PropertyChanged`) filters on every keystroke — it just re-runs `RebuildTree`,
   so filtering is a projection like everything else and never touches the document. A connection
   survives on a case-insensitive substring match of its **name or its host**; a folder survives if
-  its own name matches (its whole subtree comes with it) or if any descendant matched. Note a host
-  hit is not visible in the row itself, which shows only the name. Surviving folders are
+  its own name matches (its whole subtree comes with it) or if any descendant matched. Connection
+  rows render the host dimmed after the name (`TreeNodeViewModel.Host`/`HasHost`), so a row that
+  matched on host rather than name explains itself. Surviving folders are
   force-expanded, so `RebuildTree` stashes the user's real expansion in `_expandedBeforeFilter` when
   a search starts and restores it when the box is cleared (Escape, or the Fluent `TextBox`'s own "x").
 - **Pinned:** connections with `IsPinned` are surfaced in a synthetic **"Pinned"** group at the top

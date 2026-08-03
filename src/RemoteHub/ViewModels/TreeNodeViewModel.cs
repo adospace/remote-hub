@@ -41,6 +41,15 @@ public sealed partial class TreeNodeViewModel : ObservableObject
     /// <summary>True when this leaf connection is currently pinned.</summary>
     public bool IsPinned => Node is RdpConnection { IsPinned: true };
 
+    /// <summary>
+    /// The connection's host, shown dimmed beside the name so a search that matched on host (rather
+    /// than name) is self-explanatory. Null for folders. Read-only: an edit rebuilds the tree, so
+    /// there is nothing to keep in sync here.
+    /// </summary>
+    public string? Host => (Node as RdpConnection)?.Host;
+
+    public bool HasHost => !string.IsNullOrWhiteSpace(Host);
+
     /// <summary>Context-menu gates: pin a normal connection, unpin a pinned one.</summary>
     public bool CanPin => IsConnection && !IsPinnedContainer && !IsPinned;
     public bool CanUnpin => IsConnection && IsPinned;
