@@ -47,8 +47,9 @@ RemoteHub.sln
 Directory.Build.props            # shared: LangVersion latest, Nullable enable, ImplicitUsings
 src/
   RemoteHub.Core/                # net10.0 — models, storage, import, crypto (fully unit-tested)
-    Models/                      # ConnectionNode, FolderNode, RdpConnection, RdpDisplaySettings,
-                                 #   ConnectionDocument, ConnectionTree (move/find/remove), VaultHeader
+    Models/                      # ConnectionNode, FolderNode, RdpConnection, ConnectionDocument,
+                                 #   ConnectionTree (move/find/remove), VaultHeader, and the per-
+                                 #   connection Rdp{Display,Experience,Advanced,Gateway}Settings
     Serialization/               # ConnectionSerializer (System.Text.Json, polymorphic)
     Services/                    # ConnectionStore, SettingsService, AppSettings, ThemePreference
     Security/                    # ICredentialProtector + MasterKeyService (PBKDF2 + AES-GCM)
@@ -105,9 +106,22 @@ master-password re-encryption and path changes are reflected.
 
 ### Data model & storage
 - `ConnectionNode` (abstract) → `FolderNode` (has `Children`) or `RdpConnection` (host, port,
-  username, domain, description, `EncryptedPassword?`, `IsPinned`, `Display`). **No plaintext
-  password field.** `IsPinned` is a presentation flag (see Tree below) — the node keeps its real
-  place in the document.
+  username, domain, description, `EncryptedPassword?`, `IsPinned`, plus four settings groups).
+  **No plaintext password field.** `IsPinned` is a presentation flag (see Tree below) — the node
+  keeps its real place in the document.
+- **RDP settings** — each maps onto a property of the RDP control (see `RdpClientHost.Setup`):
+  - `Display` — screen mode, resolution, colours, full-screen connection bar, and (as its name has
+    always said, "display and redirection") audio, microphone, Windows-key routing, and clipboard /
+    printer / drive / smart-card / port redirection.
+  - `Experience` — the mstsc performance toggles (`ToPerformanceFlags()` builds the control's
+    bitmask; mind the mixed polarity), persistent bitmap caching, auto-reconnect.
+  - `Advanced` — server-authentication level, NLA (CredSSP), `/admin`, start program + folder.
+  - `Gateway` — RD Gateway usage, server, logon method, credential sharing.
+
+  **Defaults equal the control's own defaults** (probed on the real control), so a document saved
+  before a setting existed loads with it and behaves as before. The one deliberate exception is
+  font smoothing and desktop composition, which default to on as mstsc does. Enums that feed the
+  control carry its numeric codes as their values, so `RdpClientHost` casts rather than maps.
 - `ConnectionDocument` = `{ Version=2, Security: VaultHeader?, Roots: List<ConnectionNode> }`.
 - `ConnectionTree` is the one place that edits structure: `TryFindParent`, `GetAncestors`, `CanMove`
   / `Move` (refuses a folder into itself or its own subtree), `Remove`. Null means the root.
@@ -169,6 +183,17 @@ master-password re-encryption and path changes are reflected.
   *not* in the document) and hidden from their normal folder. Pin/Unpin live on the connection
   context menu; the container itself exposes no edit/structural actions (`IsRealNode = false`).
 
+### Connection editor
+`ConnectionEditorDialog` is a plain `TabControl` (fine here — no live content) with **General**
+(name, host, port, **folder**, credentials, description), **Display**, **Local resources**,
+**Experience**, and **Advanced** (security, start program, RD Gateway). The folder picker lists the
+top level plus every folder by its full path; for a new connection it defaults to the selected folder
+or the selected connection's folder. `MainViewModel` moves the connection after `ApplyTo` when the
+folder changed. Enum pickers use `Choice<T>` (value + label). OK validates host, port and — when a
+gateway is chosen — the gateway server, switching to the offending tab and focusing the field. The
+password is read from the `PasswordBox` on OK, which works from any tab (the box keeps its value
+while its tab is not shown).
+
 ### Settings
 - `SettingsService` persists `AppSettings` to `%AppData%\RemoteHub\settings.json`. `Load()` always
   returns a non-null `ConnectionsFilePath` (defaults under `%AppData%`). Has a test constructor
@@ -204,8 +229,14 @@ Three cooperating pieces:
 - **`RdpClientHost` : `System.Windows.Forms.AxHost`** — wraps the MSTSC ActiveX control with **no
   COMReference / no generated interop**; drives it via late-bound `dynamic`. It **probes at runtime**
   for a working control CLSID (`ResolveClsid`, MsRdpClient v11→v6) and applies settings defensively
-  across versions (`GetBestAdvancedSettings` walks `AdvancedSettings9`→`2`). Connection state is
-  surfaced by polling the `Connected` property on a WinForms `Timer`.
+  across versions (`GetBestSettings` picks the newest of `AdvancedSettings9`→`2`,
+  `SecuredSettings3`→`2`, `TransportSettings4`→`1`; every write goes through `TrySet`, which logs
+  "RDP setting rejected" instead of throwing). Only IDispatch interfaces are reachable this way —
+  the `NonScriptable` ones (e.g. `UseMultimon`) are not, which is why multi-monitor is not offered.
+  Full screen is applied on the first "connected" poll (the control refuses it earlier), at the
+  monitor's resolution. With no gateway configured the transport settings are left untouched, so a
+  policy-imposed gateway keeps working. Connection state is surfaced by polling the `Connected`
+  property on a WinForms `Timer`.
 - **`RdpSessionView`** (UserControl) — hosts a WinForms `Panel` inside a `WindowsFormsHost`, and
   **creates the `RdpClientHost` lazily on Connect** (`EnsureClient`), adding it to the panel — never
   during WPF layout (see Landmines). A WPF overlay shows Disconnected/Connecting state (the
@@ -321,8 +352,9 @@ diagnosing a crash: this log, plus the Windows Application event log (`Applicati
 - **Tree UX:** connection duplication; multi-select drag; optional persistence of folder expansion
   state (currently always starts collapsed by design).
 - **Sessions:** per-connection "always prompt for password" toggle; idle auto-lock of the vault;
-  auto-disconnect background tabs to save resources; multi-monitor / display-resolution options in
-  the editor.
+  auto-disconnect background tabs to save resources; multi-monitor (needs the non-IDispatch
+  `IMsRdpClientNonScriptable5`, i.e. a hand-declared COM interface rather than `dynamic`); a "match
+  the window" resolution that follows tab resizes.
 - **Import:** refine the RDM mapping against more export variants; optionally import other RDM types.
 - **Distribution:** GitHub Actions CI (build + test); publish a single-file/self-contained release;
   code signing.

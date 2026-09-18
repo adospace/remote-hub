@@ -45,9 +45,42 @@ public class ConnectionStoreTests : IDisposable
                 DesktopWidth = 2560,
                 DesktopHeight = 1440,
                 ColorDepth = ColorDepth.Bpp24,
-                FullScreen = true,
+                DisplayConnectionBar = false,
+                PinConnectionBar = false,
                 RedirectClipboard = false,
                 Audio = AudioRedirectionMode.Remote,
+                RecordAudio = true,
+                KeyboardHook = KeyboardHookMode.Remote,
+                RedirectPrinters = true,
+                RedirectDrives = true,
+                RedirectSmartCards = true,
+                RedirectPorts = true,
+            },
+            Experience = new RdpExperienceSettings
+            {
+                DesktopBackground = false,
+                FontSmoothing = false,
+                DesktopComposition = false,
+                ShowWindowContentsWhileDragging = false,
+                MenuAnimations = false,
+                VisualStyles = false,
+                PersistentBitmapCaching = false,
+                AutoReconnect = false,
+            },
+            Advanced = new RdpAdvancedSettings
+            {
+                ServerAuthentication = ServerAuthenticationMode.DoNotConnect,
+                NetworkLevelAuthentication = false,
+                AdminSession = true,
+                StartProgram = @"C:\Tools\app.exe",
+                WorkingDirectory = @"C:\Tools",
+            },
+            Gateway = new RdpGatewaySettings
+            {
+                Usage = GatewayUsage.IfDirectConnectionFails,
+                Host = "gw.contoso.com",
+                LogonMethod = GatewayLogonMethod.SmartCard,
+                ShareCredentials = false,
             },
         };
 
@@ -88,9 +121,36 @@ public class ConnectionStoreTests : IDisposable
         Assert.Equal(2560, web01.Display.DesktopWidth);
         Assert.Equal(1440, web01.Display.DesktopHeight);
         Assert.Equal(ColorDepth.Bpp24, web01.Display.ColorDepth);
-        Assert.True(web01.Display.FullScreen);
+        Assert.False(web01.Display.DisplayConnectionBar);
+        Assert.False(web01.Display.PinConnectionBar);
         Assert.False(web01.Display.RedirectClipboard);
         Assert.Equal(AudioRedirectionMode.Remote, web01.Display.Audio);
+        Assert.True(web01.Display.RecordAudio);
+        Assert.Equal(KeyboardHookMode.Remote, web01.Display.KeyboardHook);
+        Assert.True(web01.Display.RedirectPrinters);
+        Assert.True(web01.Display.RedirectDrives);
+        Assert.True(web01.Display.RedirectSmartCards);
+        Assert.True(web01.Display.RedirectPorts);
+
+        Assert.False(web01.Experience.DesktopBackground);
+        Assert.False(web01.Experience.FontSmoothing);
+        Assert.False(web01.Experience.DesktopComposition);
+        Assert.False(web01.Experience.ShowWindowContentsWhileDragging);
+        Assert.False(web01.Experience.MenuAnimations);
+        Assert.False(web01.Experience.VisualStyles);
+        Assert.False(web01.Experience.PersistentBitmapCaching);
+        Assert.False(web01.Experience.AutoReconnect);
+
+        Assert.Equal(ServerAuthenticationMode.DoNotConnect, web01.Advanced.ServerAuthentication);
+        Assert.False(web01.Advanced.NetworkLevelAuthentication);
+        Assert.True(web01.Advanced.AdminSession);
+        Assert.Equal(@"C:\Tools\app.exe", web01.Advanced.StartProgram);
+        Assert.Equal(@"C:\Tools", web01.Advanced.WorkingDirectory);
+
+        Assert.Equal(GatewayUsage.IfDirectConnectionFails, web01.Gateway.Usage);
+        Assert.Equal("gw.contoso.com", web01.Gateway.Host);
+        Assert.Equal(GatewayLogonMethod.SmartCard, web01.Gateway.LogonMethod);
+        Assert.False(web01.Gateway.ShareCredentials);
 
         var databases = Assert.IsType<FolderNode>(production.Children[1]);
         Assert.Equal("Databases", databases.Name);
@@ -101,6 +161,56 @@ public class ConnectionStoreTests : IDisposable
 
         var jump = Assert.IsType<RdpConnection>(loaded.Roots[1]);
         Assert.Equal("Jump", jump.Name);
+    }
+
+    [Fact]
+    public async Task Load_DocumentSavedBeforeTheNewSettings_GetsTheirDefaults()
+    {
+        // A connection as older builds wrote it: only the original display keys (including the
+        // retired, never-applied "fullScreen"), and no experience/advanced/gateway sections.
+        const string json = """
+            {
+              "version": 2,
+              "roots": [
+                {
+                  "$type": "rdp",
+                  "id": "11111111-1111-1111-1111-111111111111",
+                  "name": "Legacy",
+                  "host": "legacy.contoso.com",
+                  "port": 3389,
+                  "display": {
+                    "screenMode": "fixedSize",
+                    "desktopWidth": 1280,
+                    "desktopHeight": 720,
+                    "colorDepth": "bpp16",
+                    "fullScreen": true,
+                    "redirectClipboard": false,
+                    "audio": "none"
+                  }
+                }
+              ]
+            }
+            """;
+        var path = Path.Combine(_dir, "legacy.json");
+        await File.WriteAllTextAsync(path, json);
+
+        var loaded = await new ConnectionStore().LoadAsync(path);
+
+        var legacy = Assert.IsType<RdpConnection>(Assert.Single(loaded.Roots));
+        Assert.Equal(ScreenSizeMode.FixedSize, legacy.Display.ScreenMode);
+        Assert.Equal(1280, legacy.Display.DesktopWidth);
+        Assert.Equal(ColorDepth.Bpp16, legacy.Display.ColorDepth);
+        Assert.False(legacy.Display.RedirectClipboard);
+        Assert.Equal(AudioRedirectionMode.None, legacy.Display.Audio);
+
+        // New settings fall back to their defaults, which mirror the RDP control's own.
+        Assert.True(legacy.Display.DisplayConnectionBar);
+        Assert.Equal(KeyboardHookMode.FullScreenOnly, legacy.Display.KeyboardHook);
+        Assert.False(legacy.Display.RedirectDrives);
+        Assert.True(legacy.Experience.AutoReconnect);
+        Assert.Equal(ServerAuthenticationMode.Warn, legacy.Advanced.ServerAuthentication);
+        Assert.True(legacy.Advanced.NetworkLevelAuthentication);
+        Assert.Equal(GatewayUsage.None, legacy.Gateway.Usage);
     }
 
     [Fact]

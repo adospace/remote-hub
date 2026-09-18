@@ -35,6 +35,7 @@ public sealed class RdpClientHost : AxHost
     private readonly System.Windows.Forms.Timer _stateTimer = new() { Interval = 400 };
     private bool _wasConnected;
     private bool _connectAttempted;
+    private bool _fullScreenOnConnect;
 
     public event EventHandler? Connected;
     public event EventHandler<string>? Disconnected;
@@ -90,9 +91,9 @@ public sealed class RdpClientHost : AxHost
     }
 
     /// <summary>
-    /// Applies connection + display settings. When a <paramref name="password"/> is supplied it is
-    /// passed to the control for auto-logon (never persisted). Every setting is applied defensively
-    /// so a property missing on an older control version cannot break the whole configuration.
+    /// Applies every connection setting. When a <paramref name="password"/> is supplied it is passed
+    /// to the control for auto-logon (never persisted). Every setting is applied defensively so a
+    /// property missing on an older control version cannot break the whole configuration.
     /// </summary>
     public void Setup(RdpConnection connection, string? password = null)
     {
@@ -103,6 +104,8 @@ public sealed class RdpClientHost : AxHost
         }
 
         var display = connection.Display;
+        var experience = connection.Experience;
+        var advanced = connection.Advanced;
         var (width, height) = ResolveDesktopSize(display);
 
         TrySet(() => _ocx!.Server = connection.Host);
@@ -112,20 +115,82 @@ public sealed class RdpClientHost : AxHost
         TrySet(() => _ocx!.DesktopHeight = height);
         TrySet(() => _ocx!.ColorDepth = (int)display.ColorDepth);
 
-        dynamic? adv = GetBestAdvancedSettings();
+        // Enum values are defined to equal the control's own codes, hence the plain casts. The uint
+        // ones are declared unsigned by the control.
+        dynamic? adv = GetBestSettings(AdvancedSettingsNames);
         if (adv is not null)
         {
             TrySet(() => adv.RDPPort = connection.Port <= 0 ? 3389 : connection.Port);
+            // Full screen scales too, so leaving it (connection bar "restore") still fits the tab.
+            TrySet(() => adv.SmartSizing = display.ScreenMode != ScreenSizeMode.FixedSize);
+            TrySet(() => adv.DisplayConnectionBar = display.DisplayConnectionBar);
+            TrySet(() => adv.PinConnectionBar = display.PinConnectionBar);
+
+            TrySet(() => adv.AudioRedirectionMode = (uint)display.Audio);
+            TrySet(() => adv.AudioCaptureRedirectionMode = display.RecordAudio);
             TrySet(() => adv.RedirectClipboard = display.RedirectClipboard);
-            TrySet(() => adv.EnableCredSspSupport = true);
-            TrySet(() => adv.AuthenticationLevel = 2);
-            TrySet(() => adv.AudioRedirectionMode = (int)display.Audio); // Local=0, Remote=1, None=2
-            TrySet(() => adv.SmartSizing = display.ScreenMode == ScreenSizeMode.FitToWindow);
+            TrySet(() => adv.RedirectPrinters = display.RedirectPrinters);
+            TrySet(() => adv.RedirectDrives = display.RedirectDrives);
+            TrySet(() => adv.RedirectSmartCards = display.RedirectSmartCards);
+            TrySet(() => adv.RedirectPorts = display.RedirectPorts);
+
+            TrySet(() => adv.PerformanceFlags = experience.ToPerformanceFlags());
+            TrySet(() => adv.BitmapPersistence = experience.PersistentBitmapCaching ? 1 : 0);
+            TrySet(() => adv.EnableAutoReconnect = experience.AutoReconnect);
+
+            TrySet(() => adv.EnableCredSspSupport = advanced.NetworkLevelAuthentication);
+            TrySet(() => adv.AuthenticationLevel = (uint)advanced.ServerAuthentication);
+            TrySet(() => adv.ConnectToAdministerServer = advanced.AdminSession);
+
             if (!string.IsNullOrEmpty(password))
             {
                 TrySet(() => adv.ClearTextPassword = password);
             }
         }
+
+        dynamic? secured = GetBestSettings(SecuredSettingsNames);
+        if (secured is not null)
+        {
+            TrySet(() => secured.KeyboardHookMode = (int)display.KeyboardHook);
+            if (!string.IsNullOrWhiteSpace(advanced.StartProgram))
+            {
+                TrySet(() => secured.StartProgram = advanced.StartProgram);
+                if (!string.IsNullOrWhiteSpace(advanced.WorkingDirectory))
+                {
+                    TrySet(() => secured.WorkDir = advanced.WorkingDirectory);
+                }
+            }
+        }
+
+        ApplyGateway(connection.Gateway);
+
+        // The control only accepts FullScreen once connected; OnStatePollTick applies it then.
+        _fullScreenOnConnect = display.ScreenMode == ScreenSizeMode.FullScreen;
+    }
+
+    /// <summary>
+    /// Routes the connection through an RD Gateway. With no gateway configured nothing is touched,
+    /// so a gateway imposed by policy (the control's "default" profile) keeps working.
+    /// </summary>
+    private void ApplyGateway(RdpGatewaySettings gateway)
+    {
+        if (gateway.Usage == GatewayUsage.None || string.IsNullOrWhiteSpace(gateway.Host))
+        {
+            return;
+        }
+
+        dynamic? transport = GetBestSettings(TransportSettingsNames);
+        if (transport is null)
+        {
+            Log.Warn("RD Gateway requested but the control exposes no transport settings.");
+            return;
+        }
+
+        TrySet(() => transport.GatewayProfileUsageMethod = 1u); // use the explicit settings below
+        TrySet(() => transport.GatewayHostname = gateway.Host);
+        TrySet(() => transport.GatewayUsageMethod = (uint)gateway.Usage);
+        TrySet(() => transport.GatewayCredsSource = (uint)gateway.LogonMethod);
+        TrySet(() => transport.GatewayCredSharing = gateway.ShareCredentials ? 1u : 0u);
     }
 
     public void Connect()
@@ -159,16 +224,27 @@ public sealed class RdpClientHost : AxHost
         try { _ocx.FullScreen = value; } catch { /* rejected when not connected */ }
     }
 
-    /// <summary>Returns the highest available AdvancedSettingsN object, or null.</summary>
-    private object? GetBestAdvancedSettings()
+    // Each settings family grows a numbered interface per control version. Newest first: the object
+    // returned then also exposes every member of the older ones.
+    private static readonly string[] AdvancedSettingsNames =
+    {
+        "AdvancedSettings9", "AdvancedSettings8", "AdvancedSettings7", "AdvancedSettings6",
+        "AdvancedSettings5", "AdvancedSettings4", "AdvancedSettings3", "AdvancedSettings2",
+    };
+
+    private static readonly string[] SecuredSettingsNames = { "SecuredSettings3", "SecuredSettings2" };
+
+    private static readonly string[] TransportSettingsNames =
+    {
+        "TransportSettings4", "TransportSettings3", "TransportSettings2", "TransportSettings",
+    };
+
+    /// <summary>Returns the first of the named settings objects the control exposes, or null.</summary>
+    private object? GetBestSettings(string[] names)
     {
         if (_ocx is null) return null;
         object ocx = _ocx;
-        foreach (var name in new[]
-                 {
-                     "AdvancedSettings9", "AdvancedSettings8", "AdvancedSettings7", "AdvancedSettings6",
-                     "AdvancedSettings5", "AdvancedSettings4", "AdvancedSettings3", "AdvancedSettings2",
-                 })
+        foreach (var name in names)
         {
             try
             {
@@ -201,6 +277,11 @@ public sealed class RdpClientHost : AxHost
         {
             _wasConnected = true;
             Connected?.Invoke(this, EventArgs.Empty);
+            if (_fullScreenOnConnect)
+            {
+                SetFullScreen(true);
+            }
+
             return;
         }
 
@@ -234,10 +315,20 @@ public sealed class RdpClientHost : AxHost
         }
     }
 
-    private static (int width, int height) ResolveDesktopSize(RdpDisplaySettings display) =>
-        display.ScreenMode == ScreenSizeMode.FixedSize
-            ? (display.DesktopWidth, display.DesktopHeight)
-            : (Math.Max(display.DesktopWidth, 800), Math.Max(display.DesktopHeight, 600));
+    private (int width, int height) ResolveDesktopSize(RdpDisplaySettings display)
+    {
+        switch (display.ScreenMode)
+        {
+            case ScreenSizeMode.FixedSize:
+                return (display.DesktopWidth, display.DesktopHeight);
+            case ScreenSizeMode.FullScreen:
+                // The monitor the session is on, as mstsc does, so full screen is pixel-for-pixel.
+                var bounds = Screen.FromControl(this).Bounds;
+                return (bounds.Width, bounds.Height);
+            default:
+                return (Math.Max(display.DesktopWidth, 800), Math.Max(display.DesktopHeight, 600));
+        }
+    }
 
     protected override void Dispose(bool disposing)
     {

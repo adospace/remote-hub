@@ -446,17 +446,26 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var connection = new RdpConnection { Name = "New Connection" };
         var editor = _services.GetRequiredService<ConnectionEditorViewModel>();
-        editor.Load(connection);
+        editor.Load(connection, _document, SuggestFolder(node ?? SelectedNode));
         if (_dialogs.EditConnection(editor) != true)
         {
             return;
         }
 
         editor.ApplyTo(connection);
-        var target = node ?? SelectedNode;
-        var parent = target is { IsPinnedContainer: false, Node: FolderNode folder } ? folder : null;
-        await AddChildAsync(connection, parent);
+        await AddChildAsync(connection, editor.Folder);
     }
+
+    /// <summary>
+    /// The folder a new connection starts out in: the selected folder, or the folder of the selected
+    /// connection (so it lands beside it). The editor lets the user pick another.
+    /// </summary>
+    private FolderNode? SuggestFolder(TreeNodeViewModel? target) => target switch
+    {
+        null or { IsPinnedContainer: true } => null,
+        { Node: FolderNode folder } => folder,
+        _ => ConnectionTree.TryFindParent(_document, target.Node, out var parent) ? parent : null,
+    };
 
     [RelayCommand]
     private async Task OpenSettingsAsync()
@@ -514,14 +523,17 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     private async Task EditConnectionAsync(RdpConnection connection)
     {
+        ConnectionTree.TryFindParent(_document, connection, out var parent);
         var editor = _services.GetRequiredService<ConnectionEditorViewModel>();
-        editor.Load(connection);
+        editor.Load(connection, _document, parent);
         if (_dialogs.EditConnection(editor) != true)
         {
             return;
         }
 
         editor.ApplyTo(connection);
+        var moved = !ReferenceEquals(editor.Folder, parent) &&
+                    ConnectionTree.Move(_document, connection, editor.Folder);
 
         // Tabs cache the title at construction, so a rename would otherwise leave them stale.
         foreach (var session in _sessions.Sessions.Where(s => ReferenceEquals(s.Connection, connection)))
@@ -529,7 +541,7 @@ public sealed partial class MainViewModel : ObservableObject
             session.RefreshTitle();
         }
 
-        RebuildTree();   // name may have changed -> re-sort
+        RebuildTree(reveal: moved ? editor.Folder : null);   // name may have changed -> re-sort
         await SaveDocumentAsync();
     }
 

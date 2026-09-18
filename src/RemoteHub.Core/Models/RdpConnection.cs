@@ -30,4 +30,10 @@ public sealed class RdpConnection : ConnectionNode
     public string? EncryptedPassword { get; set; }
 
     public RdpDisplaySettings Display { get; set; } = new();
+
+    public RdpExperienceSettings Experience { get; set; } = new();
+
+    public RdpAdvancedSettings Advanced { get; set; } = new();
+
+    public RdpGatewaySettings Gateway { get; set; } = new();
 }

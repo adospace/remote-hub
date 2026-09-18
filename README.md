@@ -24,7 +24,9 @@ right, and nothing else in the way.
   folders to reorganise them. Double-click (or select and press Enter) to connect.
 - **Pop out any session** into its own window when you want it on a second monitor.
 - **It's the real thing.** Sessions run on the same Windows RDP engine `mstsc` uses, so they look
-  and behave exactly as you'd expect — clipboard and audio redirection included.
+  and behave exactly as you'd expect. The options you know from `mstsc` are there per connection:
+  display and colours, audio, clipboard / drives / printers / smart cards, Windows key combinations,
+  performance, NLA, `/admin`, a start program, and RD Gateway.
 - **Import your existing setup** from a Devolutions RDM export in one step.
 - **Passwords stay encrypted** behind a master password (AES-256-GCM). Optional — leave it off and
   Windows prompts at connect time as usual.
@@ -98,7 +100,7 @@ dotnet run --project src/RemoteHub
 
 - Duplicate a connection
 - Per-connection "always ask for password", plus idle auto-lock of the vault
-- Display / multi-monitor options in the connection editor
+- Multi-monitor sessions
 - Code signing, to put the SmartScreen prompt to rest
 
 Issues and PRs welcome. If RemoteHub saves you some clicks, a ⭐ genuinely helps other people find

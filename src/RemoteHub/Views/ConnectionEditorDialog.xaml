@@ -6,88 +6,245 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Connection" Height="640" Width="520"
+        Title="Connection" Height="660" Width="560" MinHeight="480" MinWidth="460"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="B2V" />
+
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,8,0,8" />
+        </Style>
+
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+
+        <Style x:Key="Option" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+
+        <!-- Every tab scrolls on its own, and they all share the same inset. -->
+        <Style x:Key="TabPage" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="Padding" Value="4,16,16,8" />
+        </Style>
     </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <!-- No password field is ever presented; credentials are prompted at connect time. -->
-                <TextBlock Text="Name" Margin="0,0,0,4" />
-                <TextBox Text="{Binding Name}" Margin="0,0,0,12" />
+        <TabControl x:Name="Tabs" Grid.Row="0">
+            <!-- General: what to connect to, where it is filed, and as whom. -->
+            <TabItem x:Name="GeneralTab" Header="General">
+                <ScrollViewer Style="{StaticResource TabPage}">
+                    <StackPanel>
+                        <TextBlock Text="Name" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding Name}" Margin="0,0,0,12" />
 
-                <TextBlock Text="Host" Margin="0,0,0,4" />
-                <TextBox Text="{Binding Host}" Margin="0,0,0,12" />
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="96" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Host" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="HostInput" Text="{Binding Host}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Port" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="PortInput" Text="{Binding Port}" />
+                            </StackPanel>
+                        </Grid>
 
-                <TextBlock Text="Port" Margin="0,0,0,4" />
-                <TextBox Text="{Binding Port}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
+                        <TextBlock Text="Folder" Style="{StaticResource FieldLabel}" />
+                        <ComboBox ItemsSource="{Binding Folders}" SelectedItem="{Binding SelectedFolder}"
+                                  DisplayMemberPath="Label" HorizontalAlignment="Stretch" Margin="0,0,0,12" />
 
-                <TextBlock Text="Username" Margin="0,0,0,4" />
-                <TextBox Text="{Binding Username}" Margin="0,0,0,12" />
+                        <TextBlock Text="Credentials" Style="{StaticResource SectionHeader}" />
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Username" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding Username}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Domain" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding Domain}" />
+                            </StackPanel>
+                        </Grid>
 
-                <TextBlock Text="Domain" Margin="0,0,0,4" />
-                <TextBox Text="{Binding Domain}" Margin="0,0,0,12" />
+                        <TextBlock Text="Password" Style="{StaticResource FieldLabel}" />
+                        <!-- Editable only when a master password is set and unlocked. -->
+                        <StackPanel Visibility="{Binding CanStorePassword, Converter={StaticResource B2V}}">
+                            <PasswordBox x:Name="PasswordInput" Margin="0,0,0,4" />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,4"
+                                       Text="Encrypted with your master password. Leave blank to keep the current one." />
+                            <CheckBox Content="Clear saved password" IsChecked="{Binding ClearStoredPassword}"
+                                      Style="{StaticResource Option}"
+                                      Visibility="{Binding HasStoredPassword, Converter={StaticResource B2V}}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Set a master password in Settings to store credentials. Without one, you are asked when connecting."
+                                   Visibility="{Binding CannotStorePassword, Converter={StaticResource B2V}}" />
 
-                <TextBlock Text="Description" Margin="0,0,0,4" />
-                <TextBox Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap"
-                         MinHeight="48" Margin="0,0,0,16" />
-
-                <TextBlock Text="Password" Margin="0,0,0,4" />
-                <!-- Editable only when a master password is set and unlocked. -->
-                <StackPanel Visibility="{Binding CanStorePassword, Converter={StaticResource B2V}}">
-                    <PasswordBox x:Name="PasswordInput" Margin="0,0,0,4" />
-                    <TextBlock Foreground="Gray" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"
-                               Text="Encrypted with your master password. Leave blank to keep the current one." />
-                    <CheckBox Content="Clear saved password" IsChecked="{Binding ClearStoredPassword}"
-                              Margin="0,0,0,16"
-                              Visibility="{Binding HasStoredPassword, Converter={StaticResource B2V}}" />
-                </StackPanel>
-                <TextBlock Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,16"
-                           Text="Set a master password in Settings to store credentials."
-                           Visibility="{Binding CannotStorePassword, Converter={StaticResource B2V}}" />
-
-                <TextBlock Text="Display" FontWeight="SemiBold" Margin="0,0,0,8" />
-
-                <TextBlock Text="Screen mode" Margin="0,0,0,4" />
-                <ComboBox ItemsSource="{Binding ScreenModes}" SelectedItem="{Binding ScreenMode}"
-                          Width="200" HorizontalAlignment="Left" Margin="0,0,0,12" />
-
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Text="Width" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding DesktopWidth}" />
+                        <TextBlock Text="Description" Style="{StaticResource FieldLabel}" Margin="0,16,0,4" />
+                        <TextBox Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap"
+                                 MinHeight="56" VerticalScrollBarVisibility="Auto" />
                     </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="Height" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding DesktopHeight}" />
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Display: how big the remote desktop is and how it fits the tab. -->
+            <TabItem Header="Display">
+                <ScrollViewer Style="{StaticResource TabPage}">
+                    <StackPanel>
+                        <TextBlock Text="Display mode" Style="{StaticResource FieldLabel}" />
+                        <ComboBox ItemsSource="{Binding ScreenModes}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding ScreenMode}"
+                                  Width="260" HorizontalAlignment="Left" Margin="0,0,0,12" />
+
+                        <Grid Margin="0,0,0,4" IsEnabled="{Binding HasCustomResolution}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Width" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding DesktopWidth}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Height" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding DesktopHeight}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,12"
+                                   Text="The remote desktop's resolution. Full screen always uses the resolution of the monitor the session opens on." />
+
+                        <TextBlock Text="Colors" Style="{StaticResource FieldLabel}" />
+                        <ComboBox ItemsSource="{Binding ColorDepths}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding ColorDepth}"
+                                  Width="260" HorizontalAlignment="Left" Margin="0,0,0,12" />
+
+                        <TextBlock Text="Full screen" Style="{StaticResource SectionHeader}" />
+                        <CheckBox Content="Show the connection bar" IsChecked="{Binding DisplayConnectionBar}"
+                                  Style="{StaticResource Option}" />
+                        <CheckBox Content="Keep the connection bar pinned" IsChecked="{Binding PinConnectionBar}"
+                                  IsEnabled="{Binding DisplayConnectionBar}"
+                                  Style="{StaticResource Option}" Margin="28,0,0,4" />
                     </StackPanel>
-                </Grid>
+                </ScrollViewer>
+            </TabItem>
 
-                <TextBlock Text="Color depth" Margin="0,0,0,4" />
-                <ComboBox ItemsSource="{Binding ColorDepths}" SelectedItem="{Binding ColorDepth}"
-                          Width="200" HorizontalAlignment="Left" Margin="0,0,0,12" />
+            <!-- Local resources: what of this computer the session can reach. -->
+            <TabItem Header="Local resources">
+                <ScrollViewer Style="{StaticResource TabPage}">
+                    <StackPanel>
+                        <TextBlock Text="Remote audio playback" Style="{StaticResource FieldLabel}" />
+                        <ComboBox ItemsSource="{Binding AudioModes}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding Audio}"
+                                  Width="260" HorizontalAlignment="Left" Margin="0,0,0,8" />
+                        <CheckBox Content="Record audio from this computer" IsChecked="{Binding RecordAudio}"
+                                  Style="{StaticResource Option}" Margin="0,0,0,12" />
 
-                <TextBlock Text="Audio" Margin="0,0,0,4" />
-                <ComboBox ItemsSource="{Binding AudioModes}" SelectedItem="{Binding Audio}"
-                          Width="200" HorizontalAlignment="Left" Margin="0,0,0,12" />
+                        <TextBlock Text="Apply Windows key combinations" Style="{StaticResource FieldLabel}" />
+                        <ComboBox ItemsSource="{Binding KeyboardHookModes}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding KeyboardHook}"
+                                  Width="260" HorizontalAlignment="Left" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,12"
+                                   Text="For example Alt+Tab and the Windows key." />
 
-                <CheckBox Content="Full screen" IsChecked="{Binding FullScreen}" Margin="0,0,0,8" />
-                <CheckBox Content="Redirect clipboard" IsChecked="{Binding RedirectClipboard}" />
-            </StackPanel>
-        </ScrollViewer>
+                        <TextBlock Text="Local devices and resources" Style="{StaticResource SectionHeader}" />
+                        <CheckBox Content="Clipboard" IsChecked="{Binding RedirectClipboard}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Printers" IsChecked="{Binding RedirectPrinters}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Smart cards" IsChecked="{Binding RedirectSmartCards}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Serial and parallel ports" IsChecked="{Binding RedirectPorts}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Drives" IsChecked="{Binding RedirectDrives}" Style="{StaticResource Option}" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="28,0,0,0"
+                                   Text="Makes every drive on this computer available in the remote session." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Experience: visual fidelity versus bandwidth, and resilience. -->
+            <TabItem Header="Experience">
+                <ScrollViewer Style="{StaticResource TabPage}">
+                    <StackPanel>
+                        <TextBlock Text="Performance" Style="{StaticResource SectionHeader}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                                   Text="Turning these off makes a session more responsive over a slow link." />
+                        <CheckBox Content="Desktop background" IsChecked="{Binding DesktopBackground}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Font smoothing" IsChecked="{Binding FontSmoothing}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Desktop composition" IsChecked="{Binding DesktopComposition}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Show window contents while dragging" IsChecked="{Binding ShowWindowContentsWhileDragging}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Menu and window animation" IsChecked="{Binding MenuAnimations}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Visual styles" IsChecked="{Binding VisualStyles}" Style="{StaticResource Option}" />
+                        <CheckBox Content="Persistent bitmap caching" IsChecked="{Binding PersistentBitmapCaching}" Style="{StaticResource Option}" />
+
+                        <TextBlock Text="Connection" Style="{StaticResource SectionHeader}" Margin="0,16,0,8" />
+                        <CheckBox Content="Reconnect if the connection is dropped" IsChecked="{Binding AutoReconnect}" Style="{StaticResource Option}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Advanced: security, a start program, and the RD Gateway. -->
+            <TabItem x:Name="AdvancedTab" Header="Advanced">
+                <ScrollViewer Style="{StaticResource TabPage}">
+                    <StackPanel>
+                        <TextBlock Text="Security" Style="{StaticResource SectionHeader}" Margin="0,0,0,8" />
+                        <TextBlock Text="If server authentication fails" Style="{StaticResource FieldLabel}" />
+                        <ComboBox ItemsSource="{Binding ServerAuthenticationModes}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding ServerAuthentication}"
+                                  Width="260" HorizontalAlignment="Left" Margin="0,0,0,8" />
+                        <CheckBox Content="Use Network Level Authentication" IsChecked="{Binding NetworkLevelAuthentication}"
+                                  Style="{StaticResource Option}" />
+                        <CheckBox Content="Connect to the administrative session (/admin)" IsChecked="{Binding AdminSession}"
+                                  Style="{StaticResource Option}" />
+
+                        <TextBlock Text="Start a program" Style="{StaticResource SectionHeader}" Margin="0,16,0,8" />
+                        <TextBlock Text="Program path and file name" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding StartProgram}" Margin="0,0,0,8" />
+                        <TextBlock Text="Start in folder" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding WorkingDirectory}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Runs instead of the desktop when the session starts, if the server allows it. Leave blank for the normal desktop." />
+
+                        <TextBlock Text="RD Gateway" Style="{StaticResource SectionHeader}" Margin="0,16,0,8" />
+                        <ComboBox ItemsSource="{Binding GatewayUsages}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding GatewayUsage}"
+                                  Width="300" HorizontalAlignment="Left" Margin="0,0,0,12" />
+                        <StackPanel IsEnabled="{Binding UsesGateway}">
+                            <TextBlock Text="Gateway server" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="GatewayHostInput" Text="{Binding GatewayHost}" Margin="0,0,0,12" />
+                            <TextBlock Text="Logon method" Style="{StaticResource FieldLabel}" />
+                            <ComboBox ItemsSource="{Binding GatewayLogonMethods}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding GatewayLogonMethod}"
+                                      Width="260" HorizontalAlignment="Left" Margin="0,0,0,8" />
+                            <CheckBox Content="Use my RD Gateway credentials for the remote computer"
+                                      IsChecked="{Binding GatewayShareCredentials}" Style="{StaticResource Option}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="OK" Width="80" Margin="0,0,8,0" IsDefault="True" Click="OnOk" />
