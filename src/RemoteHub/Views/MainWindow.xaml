@@ -68,92 +68,109 @@
         <!-- Tree row: Fluent glyph (folder / open folder / monitor) + name. -->
         <HierarchicalDataTemplate DataType="{x:Type vm:TreeNodeViewModel}"
                                   ItemsSource="{Binding Children}">
-            <StackPanel Orientation="Horizontal"
-                        Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}">
-                <StackPanel.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Connect"
-                                  Visibility="{Binding IsConnection, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.ConnectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="Pin"
-                                  Visibility="{Binding CanPin, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.PinNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="Unpin"
-                                  Visibility="{Binding CanUnpin, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.UnpinNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <Separator Visibility="{Binding IsConnection, Converter={StaticResource BoolToVis}}" />
-                        <MenuItem Header="New Folder"
-                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.NewFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="New Connection"
-                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.NewConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <Separator Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}" />
-                        <MenuItem Header="Edit"
-                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.EditNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="Rename"
-                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.RenameNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="Delete"
-                                  Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.DeleteNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                    </ContextMenu>
-                </StackPanel.ContextMenu>
+            <!-- Drop-target highlight while a node is dragged over this folder. Neutral colours on
+                 purpose: the accent is reserved for live sessions. The negative margin cancels the
+                 padding + border so the row does not shift when the highlight appears. -->
+            <Border CornerRadius="4" BorderThickness="1" Padding="3,0" Margin="-4,-1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderBrush" Value="Transparent" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel Orientation="Horizontal"
+                            Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}">
+                    <StackPanel.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Connect"
+                                      Visibility="{Binding IsConnection, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.ConnectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Pin"
+                                      Visibility="{Binding CanPin, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.PinNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Unpin"
+                                      Visibility="{Binding CanUnpin, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.UnpinNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <Separator Visibility="{Binding IsConnection, Converter={StaticResource BoolToVis}}" />
+                            <MenuItem Header="New Folder"
+                                      Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.NewFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="New Connection"
+                                      Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.NewConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <Separator Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}" />
+                            <MenuItem Header="Edit"
+                                      Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.EditNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Rename"
+                                      Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.RenameNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Delete"
+                                      Visibility="{Binding IsRealNode, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.Tag.DeleteNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        </ContextMenu>
+                    </StackPanel.ContextMenu>
 
-                <TextBlock Margin="0,0,10,0">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock" BasedOn="{StaticResource GlyphIcon}">
-                            <!-- Everything is grey at rest. The accent is reserved for one meaning
-                                 only — this connection has a LIVE session — so a coloured row in the
-                                 tree reads as "connected" at a glance rather than just "is a
-                                 connection". Keep it that way when adding states here. -->
-                            <Setter Property="Text" Value="&#xE7F4;" />
-                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                            <Style.Triggers>
-                                <!-- Folder (collapsed). -->
-                                <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                    <Setter Property="Text" Value="&#xE8B7;" />
-                                </DataTrigger>
-                                <!-- Folder (expanded) -> open-folder glyph. -->
-                                <MultiDataTrigger>
-                                    <MultiDataTrigger.Conditions>
-                                        <Condition Binding="{Binding IsFolder}" Value="True" />
-                                        <Condition Binding="{Binding IsExpanded}" Value="True" />
-                                    </MultiDataTrigger.Conditions>
-                                    <Setter Property="Text" Value="&#xE838;" />
-                                </MultiDataTrigger>
-                                <!-- Synthetic Pinned group -> pin glyph (grey: it is a container). -->
-                                <DataTrigger Binding="{Binding IsPinnedContainer}" Value="True">
-                                    <Setter Property="Text" Value="&#xE718;" />
-                                </DataTrigger>
-                                <!-- Connected: the one place the accent is used. Declared last so it
-                                     wins over the states above. -->
-                                <DataTrigger Binding="{Binding IsConnected}" Value="True">
-                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                <!-- Host, dimmed and smaller: secondary information, and the reason a row that does
-                     not look like a match shows up when searching by host. Folders have none.
-                     Secondary, not Tertiary: measured on the light theme's nav surface, tertiary
-                     came out at ~2:1 against the background — visibly washed out at 11px. -->
-                <TextBlock Text="{Binding Host}" VerticalAlignment="Center" Margin="8,1,0,0"
-                           FontSize="12" TextTrimming="CharacterEllipsis"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Visibility="{Binding HasHost, Converter={StaticResource BoolToVis}}" />
-            </StackPanel>
+                    <TextBlock Margin="0,0,10,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GlyphIcon}">
+                                <!-- Everything is grey at rest. The accent is reserved for one meaning
+                                     only — this connection has a LIVE session — so a coloured row in the
+                                     tree reads as "connected" at a glance rather than just "is a
+                                     connection". Keep it that way when adding states here. -->
+                                <Setter Property="Text" Value="&#xE7F4;" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Style.Triggers>
+                                    <!-- Folder (collapsed). -->
+                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                        <Setter Property="Text" Value="&#xE8B7;" />
+                                    </DataTrigger>
+                                    <!-- Folder (expanded) -> open-folder glyph. -->
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsFolder}" Value="True" />
+                                            <Condition Binding="{Binding IsExpanded}" Value="True" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Text" Value="&#xE838;" />
+                                    </MultiDataTrigger>
+                                    <!-- Synthetic Pinned group -> pin glyph (grey: it is a container). -->
+                                    <DataTrigger Binding="{Binding IsPinnedContainer}" Value="True">
+                                        <Setter Property="Text" Value="&#xE718;" />
+                                    </DataTrigger>
+                                    <!-- Connected: the one place the accent is used. Declared last so it
+                                         wins over the states above. -->
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                    <!-- Host, dimmed and smaller: secondary information, and the reason a row that does
+                         not look like a match shows up when searching by host. Folders have none.
+                         Secondary, not Tertiary: measured on the light theme's nav surface, tertiary
+                         came out at ~2:1 against the background — visibly washed out at 11px. -->
+                    <TextBlock Text="{Binding Host}" VerticalAlignment="Center" Margin="8,1,0,0"
+                               FontSize="12" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding HasHost, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </Border>
         </HierarchicalDataTemplate>
 
         <!-- Tab header: connection name + close button. The per-session actions live centered on
@@ -575,7 +592,10 @@
                  recycled TreeViewItem writes its stale IsExpanded back through the TwoWay binding in
                  ItemContainerStyle into whichever node it is re-attached to — which collapsed the
                  folders a search had just expanded. Standard still virtualises; it only gives up
-                 container reuse. -->
+                 container reuse.
+
+                 Drag and drop moves nodes between folders (see MainWindow.xaml.cs). Background must
+                 stay non-null so empty space below the rows still receives drag events. -->
             <TreeView x:Name="ConnectionsTree" Grid.Row="1"
                       Background="Transparent" BorderThickness="0" Padding="6,0,6,8"
                       ScrollViewer.CanContentScroll="True"
@@ -584,13 +604,28 @@
                       ItemsSource="{Binding RootNodes}"
                       SelectedItemChanged="OnTreeSelectedItemChanged"
                       MouseDoubleClick="OnTreeMouseDoubleClick"
-                      KeyDown="OnTreeKeyDown">
+                      KeyDown="OnTreeKeyDown"
+                      AllowDrop="True"
+                      PreviewMouseLeftButtonDown="OnTreePreviewMouseLeftButtonDown"
+                      PreviewMouseMove="OnTreePreviewMouseMove"
+                      DragOver="OnTreeDragOver"
+                      DragLeave="OnTreeDragLeave"
+                      Drop="OnTreeDrop">
                 <TreeView.ItemContainerStyle>
                     <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                     </Style>
                 </TreeView.ItemContainerStyle>
             </TreeView>
+
+            <!-- Shown while a drop would move the dragged node to the top level (the pointer is over
+                 empty space or a top-level connection). Not hit-testable, so the tree underneath
+                 keeps receiving the drag events. -->
+            <Rectangle x:Name="RootDropHighlight" Grid.Row="1" Margin="4,0,4,4"
+                       RadiusX="6" RadiusY="6" StrokeThickness="1.5" StrokeDashArray="4 3"
+                       Stroke="{DynamicResource ControlStrongStrokeColorDefaultBrush}"
+                       Fill="{DynamicResource SubtleFillColorSecondaryBrush}"
+                       IsHitTestVisible="False" Visibility="Collapsed" />
 
             <!-- Overlays the (empty) tree when a search matched nothing. -->
             <TextBlock Grid.Row="1" Margin="16,10" TextWrapping="Wrap"

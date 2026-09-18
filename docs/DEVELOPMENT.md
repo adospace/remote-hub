@@ -48,7 +48,7 @@ Directory.Build.props            # shared: LangVersion latest, Nullable enable, 
 src/
   RemoteHub.Core/                # net10.0 — models, storage, import, crypto (fully unit-tested)
     Models/                      # ConnectionNode, FolderNode, RdpConnection, RdpDisplaySettings,
-                                 #   ConnectionDocument, VaultHeader
+                                 #   ConnectionDocument, ConnectionTree (move/find/remove), VaultHeader
     Serialization/               # ConnectionSerializer (System.Text.Json, polymorphic)
     Services/                    # ConnectionStore, SettingsService, AppSettings, ThemePreference
     Security/                    # ICredentialProtector + MasterKeyService (PBKDF2 + AES-GCM)
@@ -109,14 +109,26 @@ master-password re-encryption and path changes are reflected.
   password field.** `IsPinned` is a presentation flag (see Tree below) — the node keeps its real
   place in the document.
 - `ConnectionDocument` = `{ Version=2, Security: VaultHeader?, Roots: List<ConnectionNode> }`.
+- `ConnectionTree` is the one place that edits structure: `TryFindParent`, `GetAncestors`, `CanMove`
+  / `Move` (refuses a folder into itself or its own subtree), `Remove`. Null means the root.
 - `ConnectionStore` loads/saves the document; **save is atomic** (temp file then move). Missing file
   → empty document.
 
 ### Tree (`MainViewModel.RebuildTree`)
 - The document is the single source of truth; the tree is a projection. **All mutations** (add /
-  rename / edit / delete / pin / unpin) change the document and then call `RebuildTree()` +
+  rename / edit / delete / pin / unpin / move) change the document and then call `RebuildTree()` +
   `SaveDocumentAsync()` — there is no surgical VM patching. Rebuild **preserves folder expansion**
-  (captured/restored by node `Id`) so it isn't visually disruptive.
+  (captured/restored by node `Id`) so it isn't visually disruptive; `RebuildTree(reveal: folder)`
+  also opens a folder and its ancestors, to show where something just landed.
+- **Drag and drop** (`MainWindow.xaml.cs`, "Tree drag and drop") moves any real node — connection or
+  folder. The drop lands in a folder: the folder row under the pointer, the *folder of* a connection
+  row under the pointer, or the top level over empty space. `MainViewModel.CanDrop` decides legality
+  (and returns false for no-ops, so the cursor shows "no drop"); `DropAsync` does it. Feedback:
+  `TreeNodeViewModel.IsDropTarget` outlines the target row, a dashed `RootDropHighlight` means "top
+  level" — both neutral colours, never the accent. Hovering a collapsed folder for 700 ms opens it;
+  hovering near the top/bottom edge scrolls. The Pinned group is special: dropping a connection on it
+  **pins** it, and dragging one out of it moves **and unpins** it (otherwise it would stay in the
+  Pinned group and look as if nothing had moved).
 - **Sorting:** every level is folders-first, then connections, each alphabetical (case-insensitive).
 - **Search:** the box above the tree (`MainViewModel.SearchText`, bound with
   `UpdateSourceTrigger=PropertyChanged`) filters on every keystroke — it just re-runs `RebuildTree`,
@@ -306,8 +318,8 @@ diagnosing a crash: this log, plus the Windows Application event log (`Applicati
 
 ## 8. Roadmap / good next tasks
 
-- **Tree UX:** drag-and-drop reordering/move; connection duplication; optional persistence of folder
-  expansion state (currently always starts collapsed by design).
+- **Tree UX:** connection duplication; multi-select drag; optional persistence of folder expansion
+  state (currently always starts collapsed by design).
 - **Sessions:** per-connection "always prompt for password" toggle; idle auto-lock of the vault;
   auto-disconnect background tabs to save resources; multi-monitor / display-resolution options in
   the editor.

@@ -25,6 +25,13 @@ public sealed partial class TreeNodeViewModel : ObservableObject
     [ObservableProperty]
     private bool _isConnected;
 
+    /// <summary>
+    /// True while a dragged node would land in this folder (or the Pinned group) if dropped now. Set
+    /// by the main window's drag handling; purely a highlight.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDropTarget;
+
     public TreeNodeViewModel(ConnectionNode node)
     {
         Node = node;

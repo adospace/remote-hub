@@ -20,8 +20,8 @@ right, and nothing else in the way.
 
 - **Everything in tabs.** Open as many servers as you like. **Switching tabs doesn't drop the
   session** — each one keeps running in the background, exactly where you left it.
-- **A real connection tree.** Nested folders, pinned favourites at the top. Double-click (or select
-  and press Enter) to connect.
+- **A real connection tree.** Nested folders, pinned favourites at the top. Drag connections and
+  folders to reorganise them. Double-click (or select and press Enter) to connect.
 - **Pop out any session** into its own window when you want it on a second monitor.
 - **It's the real thing.** Sessions run on the same Windows RDP engine `mstsc` uses, so they look
   and behave exactly as you'd expect — clipboard and audio redirection included.
@@ -96,7 +96,7 @@ dotnet run --project src/RemoteHub
 
 ## On the list
 
-- Drag-and-drop reordering, duplicate connection, and search in the tree
+- Duplicate a connection
 - Per-connection "always ask for password", plus idle auto-lock of the vault
 - Display / multi-monitor options in the connection editor
 - Code signing, to put the SmartScreen prompt to rest

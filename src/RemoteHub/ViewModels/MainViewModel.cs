@@ -194,10 +194,12 @@ public sealed partial class MainViewModel : ObservableObject
     /// Rebuilds the tree from the document: a "Pinned" group of pinned connections on top, then the
     /// normal roots. Every level is sorted (folders first, then connections, each alphabetical) and
     /// pinned connections are hidden from their normal position. Folder expansion is preserved across
-    /// the rebuild. When <see cref="SearchText"/> is non-empty the tree is filtered to matching nodes
-    /// and every surviving folder is expanded so the matches are visible without any clicking.
+    /// the rebuild, and <paramref name="reveal"/> is opened along with every folder above it — used to
+    /// show where something just landed. When <see cref="SearchText"/> is non-empty the tree is
+    /// filtered to matching nodes and every surviving folder is expanded so the matches are visible
+    /// without any clicking.
     /// </summary>
-    private void RebuildTree(Guid? alsoExpand = null)
+    private void RebuildTree(FolderNode? reveal = null)
     {
         var filter = SearchText.Trim();
 
@@ -214,9 +216,10 @@ public sealed partial class MainViewModel : ObservableObject
             _expandedBeforeFilter = null;
         }
 
-        if (alsoExpand is { } id)
+        if (reveal is not null)
         {
-            expanded.Add(id);
+            expanded.Add(reveal.Id);
+            expanded.UnionWith(ConnectionTree.GetAncestors(_document, reveal).Select(f => f.Id));
         }
 
         RootNodes.Clear();
@@ -432,7 +435,10 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        await AddChildAsync(new FolderNode { Name = name }, node ?? SelectedNode);
+        // The pinned group is not a real container, and neither is a connection: both add at the top.
+        var target = node ?? SelectedNode;
+        var parent = target is { IsPinnedContainer: false, Node: FolderNode folder } ? folder : null;
+        await AddChildAsync(new FolderNode { Name = name }, parent);
     }
 
     [RelayCommand]
@@ -447,7 +453,9 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         editor.ApplyTo(connection);
-        await AddChildAsync(connection, node ?? SelectedNode);
+        var target = node ?? SelectedNode;
+        var parent = target is { IsPinnedContainer: false, Node: FolderNode folder } ? folder : null;
+        await AddChildAsync(connection, parent);
     }
 
     [RelayCommand]
@@ -597,7 +605,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (RemoveFromModel(_document.Roots, target.Node))
+        if (ConnectionTree.Remove(_document, target.Node))
         {
             if (ReferenceEquals(SelectedNode, target))
             {
@@ -609,42 +617,83 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    // --- Tree mutation helpers --------------------------------------------
+    // --- Drag and drop -----------------------------------------------------
 
-    private async Task AddChildAsync(ConnectionNode model, TreeNodeViewModel? target)
+    /// <summary>
+    /// Whether dropping <paramref name="source"/> on <paramref name="target"/> would change anything.
+    /// The target is a folder, the Pinned group, or null for the top level of the tree.
+    /// </summary>
+    public bool CanDrop(TreeNodeViewModel source, TreeNodeViewModel? target)
     {
-        // The pinned group is not a real container: add into the pinned connection's real parent.
-        var parent = target is { IsPinnedContainer: false, Node: FolderNode folder } ? folder : null;
-        if (parent is not null)
+        if (source.IsPinnedContainer)
         {
-            parent.Children.Add(model);
-            RebuildTree(alsoExpand: parent.Id);
+            return false;
+        }
+
+        // The Pinned group is not a folder: dropping a connection on it pins the connection.
+        if (target is { IsPinnedContainer: true })
+        {
+            return source.Node is RdpConnection { IsPinned: false };
+        }
+
+        if (target is { Node: not FolderNode })
+        {
+            return false;
+        }
+
+        var destination = (FolderNode?)target?.Node;
+        if (!ConnectionTree.CanMove(_document, source.Node, destination))
+        {
+            return false;   // e.g. a folder into its own subtree
+        }
+
+        // Dragging out of the Pinned group unpins, which is a change even if the folder stays the same.
+        return source.IsPinned ||
+               !ConnectionTree.TryFindParent(_document, source.Node, out var parent) ||
+               !ReferenceEquals(parent, destination);
+    }
+
+    /// <summary>
+    /// Moves <paramref name="source"/> into <paramref name="target"/> (see <see cref="CanDrop"/>) and
+    /// opens the destination so the moved node stays in sight.
+    /// </summary>
+    public async Task DropAsync(TreeNodeViewModel source, TreeNodeViewModel? target)
+    {
+        if (!CanDrop(source, target))
+        {
+            return;
+        }
+
+        if (target is { IsPinnedContainer: true })
+        {
+            ((RdpConnection)source.Node).IsPinned = true;
+            RebuildTree();
         }
         else
         {
-            _document.Roots.Add(model);
-            RebuildTree();
+            var destination = (FolderNode?)target?.Node;
+            ConnectionTree.Move(_document, source.Node, destination);
+
+            // A pinned connection shows only in the Pinned group, so one dragged out of it would seem
+            // not to have moved at all: it goes where it was dropped instead.
+            if (source.Node is RdpConnection connection)
+            {
+                connection.IsPinned = false;
+            }
+
+            RebuildTree(reveal: destination);
         }
 
         await SaveDocumentAsync();
     }
 
-    /// <summary>Removes <paramref name="target"/> from the document tree by reference.</summary>
-    private static bool RemoveFromModel(List<ConnectionNode> nodes, ConnectionNode target)
+    // --- Tree mutation helpers --------------------------------------------
+
+    /// <summary>Adds <paramref name="model"/> to <paramref name="parent"/> (null = top level).</summary>
+    private async Task AddChildAsync(ConnectionNode model, FolderNode? parent)
     {
-        if (nodes.Remove(target))
-        {
-            return true;
-        }
-
-        foreach (var node in nodes)
-        {
-            if (node is FolderNode folder && RemoveFromModel(folder.Children, target))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        (parent?.Children ?? _document.Roots).Add(model);
+        RebuildTree(reveal: parent);
+        await SaveDocumentAsync();
     }
 }
